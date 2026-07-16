@@ -19,11 +19,18 @@ Argument_Color :: enum {
   always,
 }
 
+print_usage :: proc(program_name: string) {
+    fmt.printfln("Usage:\n" +
+      "\t%s FILE [--width WIDTH] [--color auto|always|never] [--color_mapping MAPPING]",
+      program_name)
+}
+
 parse_arguments :: proc() -> (opts : Options, file : []byte) {
   style : flags.Parsing_Style = .Unix
 
   opts.width = 16
   error := flags.parse(&opts, os.args, style)
+
   switch e in error {
     case flags.Parse_Error:
       fmt.eprintln(e.message)
@@ -32,16 +39,22 @@ parse_arguments :: proc() -> (opts : Options, file : []byte) {
       fmt.eprintln(e.message)
       os.exit(1)
     case flags.Help_Request:
+      print_usage(opts.program_name)
       os.exit(0)
     case flags.Open_File_Error:
-      fmt.eprintln("Failed to open: ", e.filename)
+      fmt.eprintfln("Failed to open '%s'", e.filename)
       os.exit(1)
+  }
+
+  if (opts.target_file == "") {
+    print_usage(opts.program_name)
+    os.exit(1)
   }
 
   ok : os.Error
   file, ok = os.read_entire_file(opts.target_file, context.allocator)
   if ok != os.ERROR_NONE {
-    fmt.eprintln("Failed to open ", opts.target_file)
+    fmt.eprintfln("Failed to open '%s'", opts.target_file)
     os.exit(1)
   }
 
