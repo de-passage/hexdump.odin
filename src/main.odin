@@ -8,47 +8,10 @@ import "core:unicode"
 import "core:math"
 import "core:fmt"
 
-should_use_color : bool
-
-fill_spaces :: proc(
-  last_byte: int,
-  target_byte : int,
-  content : string
-) {
-  if (last_byte < target_byte) {
-    for i in 0..<(target_byte - last_byte) {
-      fmt.printf(content);
-    }
-  }
-}
-
-Colorable_Type :: enum {
-  NONE,
-  ASCII,
-  SPACE,
-  OTHER,
-  ZERO,
-  FF
-}
-
-COLOR_ZERO :: ";90;90;90"
-COLOR_OTHER :: ";210;210;210"
-COLOR_SPACE :: ";10;200;200"
-COLOR_ASCII :: ";99;168;129"
-COLOR_FF :: ";242;84;10"
-
-print_ansi_code :: proc(code: string) {
-  if should_use_color {
-    fmt.print(code)
-  }
-}
-
 print_character_colored :: proc(char: byte, last: Colorable_Type, print: proc(char: byte)) -> Colorable_Type {
   print_character_with_color :: proc (char: byte, print: proc(char: byte), last: Colorable_Type, target: Colorable_Type, color: string) -> Colorable_Type {
     if last != target && should_use_color {
-        fmt.print(ansi.CSI + ansi.RESET + ansi.SGR + ansi.CSI + ansi.FG_COLOR_24_BIT)
-        fmt.print(color)
-        fmt.print(ansi.SGR)
+        print_ansi_code(ansi.CSI + ansi.RESET + ansi.SGR + ansi.CSI, color, ansi.SGR)
     }
     print(char)
     return target
@@ -85,6 +48,9 @@ main :: proc() {
   (   (!output_on_tty && opts.color == Argument_Color.always)
       || (output_on_tty && opts.color != Argument_Color.never)
   )
+  if opts.color_mapping != "" {
+    color_mapping_setup(opts.color_mapping)
+  }
 
   first_byte := 0
 
@@ -93,7 +59,7 @@ main :: proc() {
 
     line := file[first_byte:last_byte]
 
-    print_ansi_code(ansi.CSI + ansi.FG_COLOR_24_BIT + ";214;197;2" + ansi.SGR)
+    print_ansi_code(ansi.CSI, COLOR_ADDRESS, ansi.SGR)
     fmt.printf("%08X ", first_byte)
     last := Colorable_Type.NONE
     for char in line {
@@ -121,4 +87,16 @@ main :: proc() {
 
   defer delete(file)
 
+}
+
+fill_spaces :: proc(
+  last_byte: int,
+  target_byte : int,
+  content : string
+) {
+  if (last_byte < target_byte) {
+    for i in 0..<(target_byte - last_byte) {
+      fmt.printf(content);
+    }
+  }
 }

@@ -9,13 +9,14 @@ Options :: struct {
   width: int `usage:"Number of bytes to print on a single line`,
   program_name: string `args:"pos=0"`,
   target_file: string `args:"pos=1" usage:"File to analyse"`,
-  color: Argument_Color `usage:"Enable color or not"`
+  color: Argument_Color `usage:"Enable color or not"`,
+  color_mapping: string `usage:"Customize color"`,
 }
 
 Argument_Color :: enum {
+  auto,
   never,
   always,
-  auto
 }
 
 parse_arguments :: proc() -> (opts : Options, file : []byte) {
