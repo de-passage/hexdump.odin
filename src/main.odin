@@ -21,21 +21,21 @@ print_character_colored :: proc(char: byte, last: Colorable_Type, print: proc(ch
   }
   switch char {
     case 0:
-      return print_character_with_color(char, print, last, Colorable_Type.ZERO, COLOR_ZERO)
+      return print_character_with_color(char, print, last, Colorable_Type.ZERO, COLOR_ZERO.value)
     case 1..=8: // control codes
-      return print_character_with_color(char, print, last, Colorable_Type.OTHER, COLOR_OTHER)
+      return print_character_with_color(char, print, last, Colorable_Type.OTHER, COLOR_OTHER.value)
     case 9..=13:
-      return print_character_with_color(char, print, last, Colorable_Type.SPACE, COLOR_SPACE)
+      return print_character_with_color(char, print, last, Colorable_Type.SPACE, COLOR_SPACE.value)
     case 14..=19:
-      return print_character_with_color(char, print, last, Colorable_Type.OTHER, COLOR_OTHER)
+      return print_character_with_color(char, print, last, Colorable_Type.OTHER, COLOR_OTHER.value)
     case 20:
-      return print_character_with_color(char, print, last, Colorable_Type.SPACE, COLOR_SPACE)
+      return print_character_with_color(char, print, last, Colorable_Type.SPACE, COLOR_SPACE.value)
     case 21..=126:
-      return print_character_with_color(char, print, last, Colorable_Type.ASCII, COLOR_ASCII)
+      return print_character_with_color(char, print, last, Colorable_Type.ASCII, COLOR_ASCII.value)
     case 255:
-      return print_character_with_color(char, print, last, Colorable_Type.FF, COLOR_FF)
+      return print_character_with_color(char, print, last, Colorable_Type.FF, COLOR_FF.value)
     case:
-      return print_character_with_color(char, print, last, Colorable_Type.OTHER, COLOR_OTHER)
+      return print_character_with_color(char, print, last, Colorable_Type.OTHER, COLOR_OTHER.value)
   }
 }
 
@@ -73,6 +73,8 @@ main :: proc() {
     if color_mapping_value != "" {
       color_mapping_setup(color_mapping_value)
     }
+
+    default_color_setup()
   }
 
 
@@ -83,7 +85,7 @@ main :: proc() {
 
     line := file[first_byte:last_byte]
 
-    print_ansi_code(ansi.CSI, COLOR_ADDRESS, ansi.SGR)
+    print_ansi_code(ansi.CSI, COLOR_ADDRESS.value, ansi.SGR)
     fmt.printf("%08X ", first_byte)
     last := Colorable_Type.NONE
     for char in line {
