@@ -9,36 +9,9 @@ import "core:math"
 import "core:fmt"
 import "core:io"
 
+import c "colors"
+
 SCRATCH_BUFFER_SIZE :: #config(SCRATCH_BUFFER_SIZE, 1024)
-
-print_character_colored :: proc(char: byte, last: Colorable_Type, print: proc(char: byte)) -> Colorable_Type {
-  print_character_with_color :: proc (char: byte, print: proc(char: byte), last: Colorable_Type, target: Colorable_Type, color: string) -> Colorable_Type {
-    if last != target && should_use_color {
-        print_ansi_code(ansi.CSI + ansi.RESET + ansi.SGR + ansi.CSI, color, ansi.SGR)
-    }
-    print(char)
-    return target
-  }
-  switch char {
-    case 0:
-      return print_character_with_color(char, print, last, Colorable_Type.ZERO, COLOR_ZERO.value)
-    case 1..=8: // control codes
-      return print_character_with_color(char, print, last, Colorable_Type.OTHER, COLOR_OTHER.value)
-    case 9..=13:
-      return print_character_with_color(char, print, last, Colorable_Type.SPACE, COLOR_SPACE.value)
-    case 14..=19:
-      return print_character_with_color(char, print, last, Colorable_Type.OTHER, COLOR_OTHER.value)
-    case 20:
-      return print_character_with_color(char, print, last, Colorable_Type.SPACE, COLOR_SPACE.value)
-    case 21..=126:
-      return print_character_with_color(char, print, last, Colorable_Type.ASCII, COLOR_ASCII.value)
-    case 255:
-      return print_character_with_color(char, print, last, Colorable_Type.FF, COLOR_FF.value)
-    case:
-      return print_character_with_color(char, print, last, Colorable_Type.OTHER, COLOR_OTHER.value)
-  }
-}
-
 
 main :: proc() {
   opts, file := parse_arguments()
@@ -50,15 +23,15 @@ main :: proc() {
   no_color_value, _ := os.lookup_env_buf(buf[:], "NO_COLOR")
   no_color := no_color_value != ""
 
-  should_use_color = !no_color &&
+  c.should_use_color = !no_color &&
   (   (!output_on_tty && opts.color == Argument_Color.always)
       || (output_on_tty && opts.color != Argument_Color.never)
   )
 
   // Setup optional color mapping
-  if (should_use_color) {
+  if (c.should_use_color) {
     if opts.color_mapping != "" {
-      color_mapping_setup(opts.color_mapping)
+      c.color_mapping_setup(opts.color_mapping)
     }
 
     color_mapping_value, color_mapping_error := os.lookup_env_buf(buf[:], "HEXDUMP_COLOR_MAPPING")
@@ -71,10 +44,10 @@ main :: proc() {
     }
 
     if color_mapping_value != "" {
-      color_mapping_setup(color_mapping_value)
+      c.color_mapping_setup(color_mapping_value)
     }
 
-    default_color_setup()
+    c.default_color_setup()
   }
 
 
@@ -85,18 +58,18 @@ main :: proc() {
 
     line := file[first_byte:last_byte]
 
-    print_ansi_code(ansi.CSI, COLOR_ADDRESS.value, ansi.SGR)
+    c.print_ansi_code(ansi.CSI, c.COLOR_ADDRESS.value, ansi.SGR)
     fmt.printf("%08X ", first_byte)
-    last := Colorable_Type.NONE
+    last := c.Colorable_Type.NONE
     for char in line {
-      last = print_character_colored(char, last, proc(char: byte) {
+      last = c.print_character_colored(char, last, proc(char: byte) {
         fmt.printf("%02X ", char)
       })
     }
     fill_spaces(last_byte, first_byte + opts.width, "   ");
 
     for char in line {
-      last = print_character_colored(char, last, proc(char: byte) {
+      last = c.print_character_colored(char, last, proc(char: byte) {
         if char < unicode.MAX_ASCII && unicode.is_print(rune(char)) && !unicode.is_space(rune(char)) {
           fmt.print(rune(char))
         } else {

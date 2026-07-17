@@ -1,7 +1,6 @@
 package hexdump
 
 import "core:strconv"
-import "core:strings"
 import "core:os"
 import "core:terminal/ansi"
 import "core:fmt"
@@ -22,27 +21,18 @@ Color :: struct {
   value: string,
 }
 
+@(private)
 copy_color_string :: proc (color: ^Color, value: string) {
   n := copy(color.data[:], value)
   color.value = string(color.data[:n])
 }
 
-set_rgb :: proc(color: ^Color, r, g, b: u8) {
-  color.value = fmt.bprintf(color.data[:], "38;2;%i;%i;%i", r, g, b)
-}
-
-make_color :: proc(r,g,b:u8) -> Color {
-  c : Color
-  set_rgb(&c, r, g, b)
-  return c
-}
-
-DEFAULT_COLOR_ZERO :: ansi.FG_COLOR_24_BIT + ";90;90;90"
-DEFAULT_COLOR_OTHER :: ansi.FG_COLOR_24_BIT + ";210;210;210"
-DEFAULT_COLOR_SPACE :: ansi.FG_COLOR_24_BIT + ";10;200;200"
-DEFAULT_COLOR_ASCII :: ansi.FG_COLOR_24_BIT + ";99;168;129"
-DEFAULT_COLOR_FF :: ansi.FG_COLOR_24_BIT + ";242;84;10"
-DEFAULT_COLOR_ADDRESS :: ansi.FG_COLOR_24_BIT + ";214;197;2"
+@(private) DEFAULT_COLOR_ZERO :: ansi.FG_COLOR_24_BIT + ";90;90;90"
+@(private) DEFAULT_COLOR_OTHER :: ansi.FG_COLOR_24_BIT + ";210;210;210"
+@(private) DEFAULT_COLOR_SPACE :: ansi.FG_COLOR_24_BIT + ";10;200;200"
+@(private) DEFAULT_COLOR_ASCII :: ansi.FG_COLOR_24_BIT + ";99;168;129"
+@(private) DEFAULT_COLOR_FF :: ansi.FG_COLOR_24_BIT + ";242;84;10"
+@(private) DEFAULT_COLOR_ADDRESS :: ansi.FG_COLOR_24_BIT + ";214;197;2"
 
 COLOR_ZERO : Color
 COLOR_OTHER : Color
@@ -51,6 +41,7 @@ COLOR_ASCII : Color
 COLOR_FF : Color
 COLOR_ADDRESS : Color
 
+@(private)
 init_color :: proc(color: ^Color, value: string) {
   if color.value == "" {
     copy_color_string(color, value)
@@ -143,7 +134,8 @@ parse_value :: proc(color: ^Color, mapping : string, length: int, start : int, a
         fmt.eprintfln("Invalid color format key: %s", color_string)
         os.exit(1)
       }
-      set_rgb(color, u8(r), u8(g), u8(b))
+
+      color.value = fmt.bprintf(color.data[:], "38;2;%i;%i;%i", r, g, b)
 
     } else {
       switch color_string {
@@ -171,4 +163,32 @@ parse_value :: proc(color: ^Color, mapping : string, length: int, start : int, a
   }
 
   return
+}
+
+print_character_colored :: proc(char: byte, last: Colorable_Type, print: proc(char: byte)) -> Colorable_Type {
+  print_character_with_color :: proc (char: byte, print: proc(char: byte), last: Colorable_Type, target: Colorable_Type, color: string) -> Colorable_Type {
+    if last != target && should_use_color {
+        print_ansi_code(ansi.CSI + ansi.RESET + ansi.SGR + ansi.CSI, color, ansi.SGR)
+    }
+    print(char)
+    return target
+  }
+  switch char {
+    case 0:
+      return print_character_with_color(char, print, last, Colorable_Type.ZERO, COLOR_ZERO.value)
+    case 1..=8: // control codes
+      return print_character_with_color(char, print, last, Colorable_Type.OTHER, COLOR_OTHER.value)
+    case 9..=13:
+      return print_character_with_color(char, print, last, Colorable_Type.SPACE, COLOR_SPACE.value)
+    case 14..=19:
+      return print_character_with_color(char, print, last, Colorable_Type.OTHER, COLOR_OTHER.value)
+    case 20:
+      return print_character_with_color(char, print, last, Colorable_Type.SPACE, COLOR_SPACE.value)
+    case 21..=126:
+      return print_character_with_color(char, print, last, Colorable_Type.ASCII, COLOR_ASCII.value)
+    case 255:
+      return print_character_with_color(char, print, last, Colorable_Type.FF, COLOR_FF.value)
+    case:
+      return print_character_with_color(char, print, last, Colorable_Type.OTHER, COLOR_OTHER.value)
+  }
 }
