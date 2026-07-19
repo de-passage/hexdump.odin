@@ -1,4 +1,4 @@
-package hexdump
+package colors
 
 import "core:strconv"
 import "core:os"
