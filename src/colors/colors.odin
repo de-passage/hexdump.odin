@@ -1,7 +1,6 @@
 package colors
 
 import "core:strconv"
-import "core:os"
 import "core:terminal/ansi"
 import "core:fmt"
 
@@ -20,6 +19,58 @@ Color :: struct {
   data : [16]u8,
   value: string,
 }
+
+Error :: union {
+  None,
+  Parse_Error,
+}
+
+None :: struct {}
+
+Parse_Error_Detail :: union {
+  Invalid_Key,
+  Invalid_Value,
+  Unexpected_Character,
+  Unexpected_End_Of_String,
+}
+
+Parse_Error :: struct {
+  full_string: string,
+  location: int,
+  detail: Parse_Error_Detail,
+}
+
+Invalid_Key :: struct {
+  key: string
+}
+
+Invalid_Value_Detail :: union {
+  Invalid_Hex_Length,
+  Invalid_Hex_Number,
+  Unexpected_Character,
+  Empty_Value,
+}
+
+Empty_Value :: struct {}
+
+Invalid_Hex_Length :: struct {
+  length: int
+}
+
+Invalid_Hex_Number :: struct {
+  number: string
+}
+
+Invalid_Value :: struct {
+  key: string,
+  reason: Invalid_Value_Detail,
+}
+
+Unexpected_Character :: struct {
+  char: rune
+}
+
+Unexpected_End_Of_String :: struct {}
 
 @(private)
 copy_color_string :: proc (color: ^Color, value: string) {
@@ -57,42 +108,78 @@ default_color_setup :: proc() {
   init_color(&COLOR_FF, DEFAULT_COLOR_FF)
 }
 
-print_ansi_code :: proc(args:..any, sep := "") {
+print_ansi_code :: proc(args:..any, sep := "", flush := true) {
   if should_use_color {
-    fmt.print(..args, sep = "", flush = true)
+    fmt.print(..args, sep = "", flush = flush)
   }
 }
 
-color_mapping_setup :: proc(mapping : string) {
+eprint_ansi_code :: proc(args:..any, sep := "", flush := true) {
+  if should_use_color {
+    fmt.eprint(..args, sep = "", flush = flush)
+  }
+}
+
+@require_results color_mapping_setup :: proc(mapping : string) -> Error {
   length := len(mapping)
   start := 0
-  for idx := 0; idx < length; idx += 1 {
+  idx: int
+  for idx = 0; idx < length; idx += 1 {
     if mapping[idx] == '=' {
       key := mapping[start:idx]
+      ok: bool = ---
+      err: Parse_Error_Detail = ---
+      loc: int = ---
+      value_start := idx + 1
       switch key {
         case "z":
-          idx = parse_value(&COLOR_ZERO, mapping, length, idx + 1)
+          idx, ok, err, loc = parse_value(&COLOR_ZERO, mapping, length, value_start)
         case "s":
-          idx = parse_value(&COLOR_SPACE, mapping, length, idx + 1)
+          idx, ok, err, loc = parse_value(&COLOR_SPACE, mapping, length, value_start)
         case "a":
-          idx = parse_value(&COLOR_ASCII, mapping, length, idx + 1)
+          idx, ok, err, loc = parse_value(&COLOR_ASCII, mapping, length, value_start)
         case "o":
-          idx = parse_value(&COLOR_OTHER, mapping, length, idx + 1)
+          idx, ok, err, loc = parse_value(&COLOR_OTHER, mapping, length, value_start)
         case "f":
-          idx = parse_value(&COLOR_FF, mapping, length, idx + 1)
+          idx, ok, err, loc = parse_value(&COLOR_FF, mapping, length, value_start)
         case "h":
-          idx = parse_value(&COLOR_ADDRESS, mapping, length, idx + 1)
+          idx, ok, err, loc = parse_value(&COLOR_ADDRESS, mapping, length, value_start)
         case:
-          fmt.eprintfln("Invalid color format key: %s", key)
-          os.exit(1)
+          return Parse_Error{
+            mapping,
+            value_start,
+            Invalid_Key{key}
+          }
+      }
+      if !ok {
+        return Parse_Error  {
+          mapping,
+          value_start + loc,
+          err
+        }
       }
       start = idx + 1
+    } else if mapping[idx] == ',' {
+      return Parse_Error{
+        mapping,
+        idx,
+        Unexpected_Character{ rune(mapping[idx]) }
+      }
     }
   }
+
+  if idx > start {
+    return Parse_Error {
+      mapping,
+      start,
+      Unexpected_End_Of_String {}
+    }
+  }
+  return None{}
 }
 
-@(private)
-parse_value :: proc(color: ^Color, mapping : string, length: int, start : int, allocator := context.allocator) -> (idx: int) {
+@(private) @require_results
+parse_value :: proc(color: ^Color, mapping : string, length: int, start : int, allocator := context.allocator) -> (idx: int, ok: bool, err: Invalid_Value, err_loc : int) {
   color_string : string
   for idx = start; idx < length; idx += 1 {
     if mapping[idx] == ',' {
@@ -112,27 +199,32 @@ parse_value :: proc(color: ^Color, mapping : string, length: int, start : int, a
       if len(color_string) != 7 {
 
         fmt.eprintfln("Invalid color format key: %s", color_string)
-        os.exit(1)
+        ok = false
+        err = { color_string, Invalid_Hex_Length{len(color_string)} }
+        err_loc = 1
+        return
       }
 
       r,g,b : int
-      ok : bool
       r, ok = strconv.parse_int(color_string[1:3], 16)
       if !ok {
-        fmt.eprintfln("Invalid color format key: %s", color_string)
-        os.exit(1)
+        err = { color_string, Invalid_Hex_Number{color_string[1:3]}}
+        err_loc = 1
+        return
       }
 
       g, ok = strconv.parse_int(color_string[3:5], 16)
       if !ok {
-        fmt.eprintfln("Invalid color format key: %s", color_string)
-        os.exit(1)
+        err = { color_string, Invalid_Hex_Number{color_string[3:5]}}
+        err_loc = 3
+        return
       }
 
       b, ok = strconv.parse_int(color_string[5:], 16)
       if !ok {
-        fmt.eprintfln("Invalid color format key: %s", color_string)
-        os.exit(1)
+        err = { color_string, Invalid_Hex_Number{color_string[5:]}}
+        err_loc = 5
+        return
       }
 
       color.value = fmt.bprintf(color.data[:], "38;2;%i;%i;%i", r, g, b)
@@ -156,18 +248,43 @@ parse_value :: proc(color: ^Color, mapping : string, length: int, start : int, a
       case "white":
         copy_color_string(color, "37")
       case:
+        semi_col_ok := false
+        for c, i in color_string {
+          if c < '0' || c > '9' {
+            if (c == ';' || c == ':') {
+              if !semi_col_ok {
+                err = Invalid_Value{color_string, Unexpected_Character{c}}
+                ok = false
+                err_loc = i
+                return
+              }
+              semi_col_ok = false
+            } else {
+              err = Invalid_Value{color_string, Unexpected_Character{c}}
+              err_loc = i
+              ok = false
+              return
+            }
+          } else {
+            semi_col_ok = true
+          }
+        }
         copy_color_string(color, color_string);
-
       }
     }
+  } else {
+    ok = false
+    err = { "", Empty_Value{} }
   }
+
+  ok = true
 
   return
 }
 
 print_character_colored :: proc(char: byte, last: Colorable_Type, print: proc(char: byte)) -> Colorable_Type {
   print_character_with_color :: proc (char: byte, print: proc(char: byte), last: Colorable_Type, target: Colorable_Type, color: string) -> Colorable_Type {
-    if last != target && should_use_color {
+    if last != target {
         print_ansi_code(ansi.CSI + ansi.RESET + ansi.SGR + ansi.CSI, color, ansi.SGR)
     }
     print(char)
