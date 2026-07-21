@@ -1,10 +1,10 @@
 package colors
 
+import "core:fmt"
 import "core:strconv"
 import "core:terminal/ansi"
-import "core:fmt"
 
-should_use_color : bool
+should_use_color: bool
 
 Colorable_Type :: enum {
   NONE,
@@ -12,11 +12,11 @@ Colorable_Type :: enum {
   SPACE,
   OTHER,
   ZERO,
-  FF
+  FF,
 }
 
 Color :: struct {
-  data : [16]u8,
+  data:  [16]u8,
   value: string,
 }
 
@@ -36,12 +36,12 @@ Parse_Error_Detail :: union {
 
 Parse_Error :: struct {
   full_string: string,
-  location: int,
-  detail: Parse_Error_Detail,
+  location:    int,
+  detail:      Parse_Error_Detail,
 }
 
 Invalid_Key :: struct {
-  key: string
+  key: string,
 }
 
 Invalid_Value_Detail :: union {
@@ -54,43 +54,49 @@ Invalid_Value_Detail :: union {
 Empty_Value :: struct {}
 
 Invalid_Hex_Length :: struct {
-  length: int
+  length: int,
 }
 
 Invalid_Hex_Number :: struct {
-  number: string
+  number: string,
 }
 
 Invalid_Value :: struct {
-  key: string,
+  key:    string,
   reason: Invalid_Value_Detail,
 }
 
 Unexpected_Character :: struct {
-  char: rune
+  char: rune,
 }
 
 Unexpected_End_Of_String :: struct {}
 
 @(private)
-copy_color_string :: proc (color: ^Color, value: string) {
+copy_color_string :: proc(color: ^Color, value: string) {
   n := copy(color.data[:], value)
   color.value = string(color.data[:n])
 }
 
-@(private) DEFAULT_COLOR_ZERO :: ansi.FG_COLOR_24_BIT + ";90;90;90"
-@(private) DEFAULT_COLOR_OTHER :: ansi.FG_COLOR_24_BIT + ";210;210;210"
-@(private) DEFAULT_COLOR_SPACE :: ansi.FG_COLOR_24_BIT + ";10;200;200"
-@(private) DEFAULT_COLOR_ASCII :: ansi.FG_COLOR_24_BIT + ";99;168;129"
-@(private) DEFAULT_COLOR_FF :: ansi.FG_COLOR_24_BIT + ";242;84;10"
-@(private) DEFAULT_COLOR_ADDRESS :: ansi.FG_COLOR_24_BIT + ";214;197;2"
+@(private)
+DEFAULT_COLOR_ZERO :: ansi.FG_COLOR_24_BIT + ";90;90;90"
+@(private)
+DEFAULT_COLOR_OTHER :: ansi.FG_COLOR_24_BIT + ";210;210;210"
+@(private)
+DEFAULT_COLOR_SPACE :: ansi.FG_COLOR_24_BIT + ";10;200;200"
+@(private)
+DEFAULT_COLOR_ASCII :: ansi.FG_COLOR_24_BIT + ";99;168;129"
+@(private)
+DEFAULT_COLOR_FF :: ansi.FG_COLOR_24_BIT + ";242;84;10"
+@(private)
+DEFAULT_COLOR_ADDRESS :: ansi.FG_COLOR_24_BIT + ";214;197;2"
 
-COLOR_ZERO : Color
-COLOR_OTHER : Color
-COLOR_SPACE : Color
-COLOR_ASCII : Color
-COLOR_FF : Color
-COLOR_ADDRESS : Color
+COLOR_ZERO: Color
+COLOR_OTHER: Color
+COLOR_SPACE: Color
+COLOR_ASCII: Color
+COLOR_FF: Color
+COLOR_ADDRESS: Color
 
 @(private)
 init_color :: proc(color: ^Color, value: string) {
@@ -108,19 +114,20 @@ default_color_setup :: proc() {
   init_color(&COLOR_FF, DEFAULT_COLOR_FF)
 }
 
-print_ansi_code :: proc(args:..any, sep := "", flush := true) {
+print_ansi_code :: proc(args: ..any, sep := "", flush := true) {
   if should_use_color {
     fmt.print(..args, sep = "", flush = flush)
   }
 }
 
-eprint_ansi_code :: proc(args:..any, sep := "", flush := true) {
+eprint_ansi_code :: proc(args: ..any, sep := "", flush := true) {
   if should_use_color {
     fmt.eprint(..args, sep = "", flush = flush)
   }
 }
 
-@require_results color_mapping_setup :: proc(mapping : string) -> Error {
+@(require_results)
+color_mapping_setup :: proc(mapping: string) -> Error {
   length := len(mapping)
   start := 0
   idx: int
@@ -132,64 +139,60 @@ eprint_ansi_code :: proc(args:..any, sep := "", flush := true) {
       loc: int = ---
       value_start := idx + 1
       switch key {
-        case "z":
-          idx, ok, err, loc = parse_value(&COLOR_ZERO, mapping, length, value_start)
-        case "s":
-          idx, ok, err, loc = parse_value(&COLOR_SPACE, mapping, length, value_start)
-        case "a":
-          idx, ok, err, loc = parse_value(&COLOR_ASCII, mapping, length, value_start)
-        case "o":
-          idx, ok, err, loc = parse_value(&COLOR_OTHER, mapping, length, value_start)
-        case "f":
-          idx, ok, err, loc = parse_value(&COLOR_FF, mapping, length, value_start)
-        case "h":
-          idx, ok, err, loc = parse_value(&COLOR_ADDRESS, mapping, length, value_start)
-        case:
-          return Parse_Error{
-            mapping,
-            value_start,
-            Invalid_Key{key}
-          }
+      case "z":
+        idx, ok, err, loc = parse_value(&COLOR_ZERO, mapping, length, value_start)
+      case "s":
+        idx, ok, err, loc = parse_value(&COLOR_SPACE, mapping, length, value_start)
+      case "a":
+        idx, ok, err, loc = parse_value(&COLOR_ASCII, mapping, length, value_start)
+      case "o":
+        idx, ok, err, loc = parse_value(&COLOR_OTHER, mapping, length, value_start)
+      case "f":
+        idx, ok, err, loc = parse_value(&COLOR_FF, mapping, length, value_start)
+      case "h":
+        idx, ok, err, loc = parse_value(&COLOR_ADDRESS, mapping, length, value_start)
+      case:
+        return Parse_Error{mapping, value_start, Invalid_Key{key}}
       }
       if !ok {
-        return Parse_Error  {
-          mapping,
-          value_start + loc,
-          err
-        }
+        return Parse_Error{mapping, value_start + loc, err}
       }
       start = idx + 1
     } else if mapping[idx] == ',' {
-      return Parse_Error{
-        mapping,
-        idx,
-        Unexpected_Character{ rune(mapping[idx]) }
-      }
+      return Parse_Error{mapping, idx, Unexpected_Character{rune(mapping[idx])}}
     }
   }
 
   if idx > start {
-    return Parse_Error {
-      mapping,
-      start,
-      Unexpected_End_Of_String {}
-    }
+    return Parse_Error{mapping, start, Unexpected_End_Of_String{}}
   }
   return None{}
 }
 
-@(private) @require_results
-parse_value :: proc(color: ^Color, mapping : string, length: int, start : int, allocator := context.allocator) -> (idx: int, ok: bool, err: Invalid_Value, err_loc : int) {
-  color_string : string
+@(private)
+@(require_results)
+parse_value :: proc(
+  color: ^Color,
+  mapping: string,
+  length: int,
+  start: int,
+  allocator := context.allocator,
+) -> (
+  idx: int,
+  ok: bool,
+  err: Invalid_Value,
+  err_loc: int,
+) {
+  color_string: string
   for idx = start; idx < length; idx += 1 {
     if mapping[idx] == ',' {
-      color_string = mapping[start:idx];
+      color_string = mapping[start:idx]
       break
     }
   }
 
   if idx == length {
-     color_string = mapping[start:];
+    color_string = mapping[start:]
   }
 
   if len(color_string) > 0 {
@@ -200,29 +203,29 @@ parse_value :: proc(color: ^Color, mapping : string, length: int, start : int, a
 
         fmt.eprintfln("Invalid color format key: %s", color_string)
         ok = false
-        err = { color_string, Invalid_Hex_Length{len(color_string)} }
+        err = {color_string, Invalid_Hex_Length{len(color_string)}}
         err_loc = 1
         return
       }
 
-      r,g,b : int
+      r, g, b: int
       r, ok = strconv.parse_int(color_string[1:3], 16)
       if !ok {
-        err = { color_string, Invalid_Hex_Number{color_string[1:3]}}
+        err = {color_string, Invalid_Hex_Number{color_string[1:3]}}
         err_loc = 1
         return
       }
 
       g, ok = strconv.parse_int(color_string[3:5], 16)
       if !ok {
-        err = { color_string, Invalid_Hex_Number{color_string[3:5]}}
+        err = {color_string, Invalid_Hex_Number{color_string[3:5]}}
         err_loc = 3
         return
       }
 
       b, ok = strconv.parse_int(color_string[5:], 16)
       if !ok {
-        err = { color_string, Invalid_Hex_Number{color_string[5:]}}
+        err = {color_string, Invalid_Hex_Number{color_string[5:]}}
         err_loc = 5
         return
       }
@@ -269,12 +272,12 @@ parse_value :: proc(color: ^Color, mapping : string, length: int, start : int, a
             semi_col_ok = true
           }
         }
-        copy_color_string(color, color_string);
+        copy_color_string(color, color_string)
       }
     }
   } else {
     ok = false
-    err = { "", Empty_Value{} }
+    err = {"", Empty_Value{}}
   }
 
   ok = true
@@ -282,30 +285,41 @@ parse_value :: proc(color: ^Color, mapping : string, length: int, start : int, a
   return
 }
 
-print_character_colored :: proc(char: byte, last: Colorable_Type, print: proc(char: byte)) -> Colorable_Type {
-  print_character_with_color :: proc (char: byte, print: proc(char: byte), last: Colorable_Type, target: Colorable_Type, color: string) -> Colorable_Type {
+print_character_colored :: proc(
+  char: byte,
+  last: Colorable_Type,
+  print: proc(char: byte),
+) -> Colorable_Type {
+  print_character_with_color :: proc(
+    char: byte,
+    print: proc(char: byte),
+    last: Colorable_Type,
+    target: Colorable_Type,
+    color: string,
+  ) -> Colorable_Type {
     if last != target {
-        print_ansi_code(ansi.CSI + ansi.RESET + ansi.SGR + ansi.CSI, color, ansi.SGR)
+      print_ansi_code(ansi.CSI + ansi.RESET + ansi.SGR + ansi.CSI, color, ansi.SGR)
     }
     print(char)
     return target
   }
   switch char {
-    case 0:
-      return print_character_with_color(char, print, last, Colorable_Type.ZERO, COLOR_ZERO.value)
-    case 1..=8: // control codes
-      return print_character_with_color(char, print, last, Colorable_Type.OTHER, COLOR_OTHER.value)
-    case 9..=13:
-      return print_character_with_color(char, print, last, Colorable_Type.SPACE, COLOR_SPACE.value)
-    case 14..=19:
-      return print_character_with_color(char, print, last, Colorable_Type.OTHER, COLOR_OTHER.value)
-    case 20:
-      return print_character_with_color(char, print, last, Colorable_Type.SPACE, COLOR_SPACE.value)
-    case 21..=126:
-      return print_character_with_color(char, print, last, Colorable_Type.ASCII, COLOR_ASCII.value)
-    case 255:
-      return print_character_with_color(char, print, last, Colorable_Type.FF, COLOR_FF.value)
-    case:
-      return print_character_with_color(char, print, last, Colorable_Type.OTHER, COLOR_OTHER.value)
+  case 0:
+    return print_character_with_color(char, print, last, Colorable_Type.ZERO, COLOR_ZERO.value)
+  case 1 ..= 8:
+    // control codes
+    return print_character_with_color(char, print, last, Colorable_Type.OTHER, COLOR_OTHER.value)
+  case 9 ..= 13:
+    return print_character_with_color(char, print, last, Colorable_Type.SPACE, COLOR_SPACE.value)
+  case 14 ..= 19:
+    return print_character_with_color(char, print, last, Colorable_Type.OTHER, COLOR_OTHER.value)
+  case 20:
+    return print_character_with_color(char, print, last, Colorable_Type.SPACE, COLOR_SPACE.value)
+  case 21 ..= 126:
+    return print_character_with_color(char, print, last, Colorable_Type.ASCII, COLOR_ASCII.value)
+  case 255:
+    return print_character_with_color(char, print, last, Colorable_Type.FF, COLOR_FF.value)
+  case:
+    return print_character_with_color(char, print, last, Colorable_Type.OTHER, COLOR_OTHER.value)
   }
 }
