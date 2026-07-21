@@ -11,6 +11,12 @@ Options :: struct {
   target_file:   string `args:"pos=1" usage:"File to analyse"`,
   color:         Argument_Color `usage:"Enable color or not"`,
   color_mapping: string `usage:"Customize color"`,
+  format:        File_Format `usage:"Output format"`,
+}
+
+File_Format :: enum {
+  none,
+  elf,
 }
 
 Argument_Color :: enum {

@@ -10,6 +10,7 @@ import "core:terminal/ansi"
 import "core:unicode"
 
 import c "colors"
+import e "elf"
 
 SCRATCH_BUFFER_SIZE :: #config(SCRATCH_BUFFER_SIZE, 1024)
 
@@ -64,6 +65,7 @@ handle_color_mapping_error :: proc(mapping_error: c.Error) {
 
 main :: proc() {
   opts, file := parse_arguments()
+  defer delete(file)
 
   buf: [SCRATCH_BUFFER_SIZE]u8
 
@@ -106,11 +108,27 @@ main :: proc() {
     c.default_color_setup()
   }
 
+  switch opts.format {
+  case File_Format.none:
+    decode_generic_file(file, opts.width)
+  case File_Format.elf:
+    e.decode_elf_file(file)
+  }
+}
 
+fill_spaces :: proc(last_byte: int, target_byte: int, content: string) {
+  if (last_byte < target_byte) {
+    for i in 0 ..< (target_byte - last_byte) {
+      fmt.printf(content)
+    }
+  }
+}
+
+decode_generic_file :: proc(file: []byte, width: int) {
   first_byte := 0
 
   for first_byte < len(file) {
-    last_byte := math.min(first_byte + opts.width, len(file))
+    last_byte := math.min(first_byte + width, len(file))
 
     line := file[first_byte:last_byte]
 
@@ -122,7 +140,7 @@ main :: proc() {
         fmt.printf("%02X ", char)
       })
     }
-    fill_spaces(last_byte, first_byte + opts.width, "   ")
+    fill_spaces(last_byte, first_byte + width, "   ")
 
     for char in line {
       last = c.print_character_colored(char, last, proc(char: byte) {
@@ -135,21 +153,10 @@ main :: proc() {
         }
       })
     }
-    fill_spaces(last_byte, first_byte + opts.width, " ")
+    fill_spaces(last_byte, first_byte + width, " ")
 
     fmt.println(ansi.CSI + ansi.RESET + ansi.SGR)
 
-    first_byte += opts.width
-  }
-
-  defer delete(file)
-
-}
-
-fill_spaces :: proc(last_byte: int, target_byte: int, content: string) {
-  if (last_byte < target_byte) {
-    for i in 0 ..< (target_byte - last_byte) {
-      fmt.printf(content)
-    }
+    first_byte += width
   }
 }
