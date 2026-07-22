@@ -1,20 +1,28 @@
 package elf
 
 import "core:encoding/endian"
+import "core:fmt"
 import "core:slice"
 
 Elf_Header :: struct {
-  class:      Elf_Class,
-  endianness: endian.Byte_Order,
-  version:    u8,
-  abi:        Elf_ABI,
-  type:       Elf_Type,
-  machine:    Elf_Arch,
-  entry_point:           u64,
-  program_header_offset: u64,
-  section_header_offset: u64,
-  flags:      u32,
-  size:       u32,
+  class:                     Elf_Class,
+  endianness:                endian.Byte_Order,
+  version:                   u8,
+  abi:                       Elf_ABI,
+  abi_version:               u8,
+  type:                      Elf_Type,
+  machine:                   Elf_Arch,
+  elf_version:               u32,
+  entry_point:               u64,
+  program_header_offset:     u64,
+  section_header_offset:     u64,
+  flags:                     u32,
+  size:                      u32,
+  program_header_size:       u16,
+  program_header_table_size: u16,
+  section_header_size:       u16,
+  section_header_table_size: u16,
+  section_name_index:        u16,
 }
 
 Elf_Class :: enum u8 {
@@ -138,8 +146,7 @@ Elf_Offsets_32bit :: struct {
   section_header_offset: u32,
 }
 
-Elf_Offsets_64bit :: struct {
-}
+Elf_Offsets_64bit :: struct {}
 
 Elf_Offsets :: union {
   Elf_Offsets_32bit,
@@ -167,19 +174,73 @@ Error :: union {
   Header_Too_Small,
   Invalid_Elf_Class,
   Invalid_Elf_Endianess,
+  Conversion_Failed,
 }
+
+Conversion_Failed :: struct {}
 
 decode_elf_file :: proc(file: []byte) -> (err: Error) {
   header: Elf_Header = ---
   header, err = decode_elf_header(file)
 
   switch e in err {
-  case Wrong_Magic, Header_Too_Small, Invalid_Elf_Endianess, Invalid_Elf_Class:
+  case Wrong_Magic, Header_Too_Small, Invalid_Elf_Endianess, Invalid_Elf_Class, Conversion_Failed:
     return
   case None:
   }
+  // do something else
+
+  fmt.println("Header content:")
+  fmt.println("\tElf:", header.class)
+  fmt.println("\tType:", header.type)
+  fmt.println("\tEndianness:", header.endianness)
+  fmt.println("\tArch:", header.machine)
+  fmt.println("\tABI:", header.abi)
+  fmt.println("\tSize:", header.size)
+  fmt.printfln("\tEntry point: 0x%08X", header.entry_point)
+  fmt.printfln("\tProgram Header: 0x%08X", header.program_header_offset)
+  fmt.println("\t\tProgram Header Size:", header.program_header_size)
+  fmt.println("\t\tProgram Header Table Size:", header.program_header_table_size)
+  fmt.printfln("\tSection Header: 0x%08X", header.section_header_offset)
+  fmt.println("\t\tProgram Section Size:", header.section_header_size)
+  fmt.println("\t\tProgram Section Table Size:", header.section_header_table_size)
+  fmt.println("\t\tSection Name Offset:", header.section_header_table_size)
+  fmt.printfln("\tFlags: %X", header.flags)
 
   return None{}
+}
+
+@(private)
+decode_field :: proc(
+  $source: typeid,
+  buffer: []byte,
+  fill: ^$T,
+  offset: ^int,
+  endianness: endian.Byte_Order,
+  err: ^Error,
+) -> (
+  ok: bool,
+) {
+  value: source = ---
+  when source == u16 {
+    value, ok = endian.get_u16(buffer[offset^:offset^ + 2], endianness)
+  } else when source == u32 {
+    value, ok = endian.get_u32(buffer[offset^:offset^ + 4], endianness)
+  } else when source == u64 {
+    value, ok = endian.get_u64(buffer[offset^:offset^ + 8], endianness)
+  }
+  if !ok {
+    err^ = Conversion_Failed{}
+    return
+  }
+  when source != T {
+    fill^ = T(value)
+  } else {
+    fill^ = value
+  }
+  offset^ += size_of(source)
+
+  return
 }
 
 decode_elf_header :: proc(file: []byte) -> (header: Elf_Header, err: Error) {
@@ -227,20 +288,77 @@ decode_elf_header :: proc(file: []byte) -> (header: Elf_Header, err: Error) {
   }
 
   header.version = file[0x06]
-  header.abi = Elf_ABI(file[0x08])
-  header.type = (transmute(^Elf_Type)raw_data(file[0x10:0x12]))^
-  header.machine = (transmute(^Elf_Arch)raw_data(file[0x12:0x14]))^
+  header.abi = Elf_ABI(file[0x07])
+  header.abi_version = file[0x08]
+
+  offset: int = 0x10
+  if !decode_field(u16, file, &header.type, &offset, header.endianness, &err) {
+    return
+  }
+  if !decode_field(u16, file, &header.machine, &offset, header.endianness, &err) {
+    return
+  }
+  if !decode_field(u32, file, &header.elf_version, &offset, header.endianness, &err) {
+    return
+  }
 
   #partial switch header.class {
   case .Bit_32:
-      header.entry_point           = u64((transmute(^u32)raw_data(file[0x18:0x1C]))^)
-      header.program_header_offset = u64((transmute(^u32)raw_data(file[0x1C:0x20]))^)
-      header.section_header_offset = u64((transmute(^u32)raw_data(file[0x20:0x24]))^)
+    if !decode_field(u32, file, &header.entry_point, &offset, header.endianness, &err) {
+      return
+    }
+
+    if !decode_field(u32, file, &header.program_header_offset, &offset, header.endianness, &err) {
+      return
+    }
+
+    if !decode_field(u32, file, &header.section_header_offset, &offset, header.endianness, &err) {
+      return
+    }
+
   case .Bit_64:
-      header.entry_point           = (transmute(^u64)raw_data(file[0x18:0x20]))^
-      header.program_header_offset = (transmute(^u64)raw_data(file[0x20:0x28]))^
-      header.section_header_offset = (transmute(^u64)raw_data(file[0x28:0x30]))^
+    if !decode_field(u64, file, &header.entry_point, &offset, header.endianness, &err) {
+      return
+    }
+
+    if !decode_field(u64, file, &header.program_header_offset, &offset, header.endianness, &err) {
+      return
+    }
+
+    if !decode_field(u64, file, &header.section_header_offset, &offset, header.endianness, &err) {
+      return
+    }
   }
+
+  if !decode_field(u32, file, &header.flags, &offset, header.endianness, &err) {
+    return
+  }
+
+  if !decode_field(u16, file, &header.size, &offset, header.endianness, &err) {
+    return
+  }
+
+  if !decode_field(u16, file, &header.program_header_size, &offset, header.endianness, &err) {
+    return
+  }
+
+  if !decode_field(u16, file, &header.program_header_table_size, &offset, header.endianness, &err) {
+    return
+  }
+
+  if !decode_field(u16, file, &header.section_header_size, &offset, header.endianness, &err) {
+    return
+  }
+
+  if !decode_field(u16, file, &header.section_header_table_size, &offset, header.endianness, &err) {
+    return
+  }
+
+  if !decode_field(u16, file, &header.section_name_index, &offset, header.endianness, &err) {
+    return
+  }
+
+  assert((header.class == .Bit_32 && offset == 0x34) || offset == 0x40)
 
   return
 }
