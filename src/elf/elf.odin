@@ -31,8 +31,10 @@ decode_elf_file :: proc(file: []byte) -> (err: Error) {
   fmt.println("\t\tProgram Section Table Size:", header.section_header_table_size)
   fmt.println("\t\tSection Name Index:", header.section_name_index)
   fmt.printfln("\tFlags: %X", header.flags)
+  fmt.println()
 
   start_of_program_header := header.program_header_offset
+
   for x in 0 ..< header.program_header_table_size {
     program_header: Program_Header = ---
     program_header, err = decode_program_header(
@@ -50,6 +52,11 @@ decode_elf_file :: proc(file: []byte) -> (err: Error) {
       return
     case None:
     }
+
+    fmt.printfln("Segment [%i]", x)
+    fmt.println("Type:", program_header.type)
+
+    start_of_program_header += u64(header.program_header_size)
   }
 
   return None{}
@@ -141,6 +148,31 @@ decode_section_header :: proc(
     }
   }
 
+  if !decode_field(u32, file, &header.link, &offset, byte_order, &err) {
+    return
+  }
+  if !decode_field(u32, file, &header.info, &offset, byte_order, &err) {
+    return
+  }
+
+  #partial switch class {
+  case .Bit_32:
+    if !decode_field(u32, file, &header.alignment, &offset, byte_order, &err) {
+      return
+    }
+    if !decode_field(u32, file, &header.entry_size, &offset, byte_order, &err) {
+      return
+    }
+  case .Bit_64:
+    if !decode_field(u64, file, &header.alignment, &offset, byte_order, &err) {
+      return
+    }
+    if !decode_field(u64, file, &header.entry_size, &offset, byte_order, &err) {
+      return
+    }
+  }
+
+  assert((class == .Bit_32 && offset == 0x28) || offset == 0x40)
   return
 }
 
@@ -192,22 +224,22 @@ decode_program_header :: proc(
     if !decode_field(u32, file, &header.flags, &offset, byte_order, &err) {
       return
     }
-    if !decode_field(u32, file, &header.offset, &offset, byte_order, &err) {
+    if !decode_field(u64, file, &header.offset, &offset, byte_order, &err) {
       return
     }
-    if !decode_field(u32, file, &header.virtual_address, &offset, byte_order, &err) {
+    if !decode_field(u64, file, &header.virtual_address, &offset, byte_order, &err) {
       return
     }
-    if !decode_field(u32, file, &header.physical_address, &offset, byte_order, &err) {
+    if !decode_field(u64, file, &header.physical_address, &offset, byte_order, &err) {
       return
     }
-    if !decode_field(u32, file, &header.file_segment_size, &offset, byte_order, &err) {
+    if !decode_field(u64, file, &header.file_segment_size, &offset, byte_order, &err) {
       return
     }
-    if !decode_field(u32, file, &header.memory_segment_size, &offset, byte_order, &err) {
+    if !decode_field(u64, file, &header.memory_segment_size, &offset, byte_order, &err) {
       return
     }
-    if !decode_field(u32, file, &header.alignment, &offset, byte_order, &err) {
+    if !decode_field(u64, file, &header.alignment, &offset, byte_order, &err) {
       return
     }
   }

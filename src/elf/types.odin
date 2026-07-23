@@ -1,6 +1,7 @@
 package elf
 
 import "core:encoding/endian"
+import "core:fmt"
 
 Elf_Header :: struct {
   class:                     Elf_Class,
@@ -165,9 +166,14 @@ Program_Header_Type :: enum u32 {
 }
 
 Program_Header_Flags :: enum u32 {
+  None,
   PF_X = 1,
   PF_W = 2,
+  PF_XW = 3,
   PF_R = 4,
+  PF_XR = 5,
+  PF_WR = 6,
+  PF_XWR = 7,
 }
 
 Section_Header :: struct {
@@ -178,6 +184,7 @@ Section_Header :: struct {
   file_offset:     u64,
   size:            u64,
   link:            u32,
+  info:            u32,
   alignment:       u64,
   entry_size:      u64,
 }
