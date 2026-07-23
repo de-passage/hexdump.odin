@@ -67,6 +67,9 @@ main :: proc() {
   opts, file := parse_arguments()
   defer delete(file)
 
+  fmt.set_user_formatters(new(map[typeid]fmt.User_Formatter))
+  e.register_custom_formatters()
+
   buf: [SCRATCH_BUFFER_SIZE]u8
 
   // Should we use color at all?
