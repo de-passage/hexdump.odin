@@ -139,5 +139,84 @@ Elf_ABI :: enum u8 {
 }
 
 Program_Header :: struct {
+  type:                Program_Header_Type,
+  flags:               Program_Header_Flags,
+  offset:              u64,
+  virtual_address:     u64,
+  physical_address:    u64,
+  file_segment_size:   u64,
+  memory_segment_size: u64,
+  alignment:           u64,
+}
 
+Program_Header_Type :: enum u32 {
+  PT_NULL    = 0x00000000, // Program header table entry unused.
+  PT_LOAD    = 0x00000001, // Loadable segment.
+  PT_DYNAMIC = 0x00000002, // Dynamic linking information.
+  PT_INTERP  = 0x00000003, // Interpreter information.
+  PT_NOTE    = 0x00000004, // Auxiliary information.
+  PT_SHLIB   = 0x00000005, // Reserved.
+  PT_PHDR    = 0x00000006, // Segment containing program header table itself.
+  PT_TLS     = 0x00000007, // Thread-Local Storage template.
+  PT_LOOS    = 0x60000000, // Reserved inclusive range. Operating system specific.
+  PT_HIOS    = 0x6FFFFFFF, //
+  PT_LOPROC  = 0x70000000, // Reserved inclusive range. Processor specific.
+  PT_HIPROC  = 0x7FFFFFFF, //
+}
+
+Program_Header_Flags :: enum u32 {
+  PF_X = 1,
+  PF_W = 2,
+  PF_R = 4,
+}
+
+Section_Header :: struct {
+  name:            u32,
+  type:            Section_Header_Type,
+  flags:           Section_Header_Flags,
+  virtual_address: u64,
+  file_offset:     u64,
+  size:            u64,
+  link:            u32,
+  alignment:       u64,
+  entry_size:      u64,
+}
+
+Section_Header_Type :: enum u32 {
+  SHT_NULL          = 0x0, // Section header table entry unused
+  SHT_PROGBITS      = 0x1, // Program data
+  SHT_SYMTAB        = 0x2, // Symbol table
+  SHT_STRTAB        = 0x3, // String table
+  SHT_RELA          = 0x4, // Relocation entries with addends
+  SHT_HASH          = 0x5, // Symbol hash table
+  SHT_DYNAMIC       = 0x6, // Dynamic linking information
+  SHT_NOTE          = 0x7, // Notes
+  SHT_NOBITS        = 0x8, // Program space with no data (bss)
+  SHT_REL           = 0x9, // Relocation entries, no addends
+  SHT_SHLIB         = 0x0A, // Reserved
+  SHT_DYNSYM        = 0x0B, // Dynamic linker symbol table
+  SHT_INIT_ARRAY    = 0x0E, // Array of constructors
+  SHT_FINI_ARRAY    = 0x0F, // Array of destructors
+  SHT_PREINIT_ARRAY = 0x10, // Array of pre-constructors
+  SHT_GROUP         = 0x11, // Section group
+  SHT_SYMTAB_SHNDX  = 0x12, // Extended section indices
+  SHT_NUM           = 0x13, // Number of defined types.
+  SHT_LOOS          = 0x60000000, // Start OS-specific.
+}
+
+Section_Header_Flags :: enum u64 {
+  SHF_WRITE            = 0x1, // Writable
+  SHF_ALLOC            = 0x2, // Occupies memory during execution
+  SHF_EXECINSTR        = 0x4, // Executable
+  SHF_MERGE            = 0x10, // Might be merged
+  SHF_STRINGS          = 0x20, // Contains null-terminated strings
+  SHF_INFO_LINK        = 0x40, // 'sh_info' contains SHT index
+  SHF_LINK_ORDER       = 0x80, // Preserve order after combining
+  SHF_OS_NONCONFORMING = 0x100, // Non-standard OS specific handling required
+  SHF_GROUP            = 0x200, // Section is member of a group
+  SHF_TLS              = 0x400, // Section hold thread-local data
+  SHF_MASKOS           = 0x0FF00000, // OS-specific
+  SHF_MASKPROC         = 0xF0000000, // Processor-specific
+  SHF_ORDERED          = 0x4000000, // Special ordering requirement (Solaris)
+  SHF_EXCLUDE          = 0x8000000, // Section is excluded unless referenced or allocated (Solaris)
 }

@@ -29,8 +29,28 @@ decode_elf_file :: proc(file: []byte) -> (err: Error) {
   fmt.printfln("\tSection Header: 0x%08X", header.section_header_offset)
   fmt.println("\t\tProgram Section Size:", header.section_header_size)
   fmt.println("\t\tProgram Section Table Size:", header.section_header_table_size)
-  fmt.println("\t\tSection Name Offset:", header.section_header_table_size)
+  fmt.println("\t\tSection Name Index:", header.section_name_index)
   fmt.printfln("\tFlags: %X", header.flags)
+
+  start_of_program_header := header.program_header_offset
+  for x in 0 ..< header.program_header_table_size {
+    program_header: Program_Header = ---
+    program_header, err = decode_program_header(
+      file[start_of_program_header:],
+      header.endianness,
+      header.class,
+    )
+
+    switch e in err {
+    case Wrong_Magic,
+         Header_Too_Small,
+         Invalid_Elf_Endianess,
+         Invalid_Elf_Class,
+         Conversion_Failed:
+      return
+    case None:
+    }
+  }
 
   return None{}
 }
@@ -68,8 +88,131 @@ decode_field :: proc(
   return
 }
 
+decode_section_header :: proc(
+  file: []byte,
+  byte_order: endian.Byte_Order,
+  class: Elf_Class,
+) -> (
+  header: Section_Header,
+  err: Error,
+) {
+  length := len(file)
+  if class == .Bit_32 && length < 0x28 {
+    err = Header_Too_Small{length, .Bit_32}
+    return
+  } else if length < 0x40 {
+    err = Header_Too_Small{length, .Bit_64}
+  }
+  offset := 0
 
-decode_program_header :: proc(file: []byte) -> (header: Program_Header, err: Error) {
+  if !decode_field(u32, file, &header.name, &offset, byte_order, &err) {
+    return
+  }
+  if !decode_field(u32, file, &header.type, &offset, byte_order, &err) {
+    return
+  }
+
+  #partial switch class {
+  case .Bit_32:
+    if !decode_field(u32, file, &header.flags, &offset, byte_order, &err) {
+      return
+    }
+    if !decode_field(u32, file, &header.virtual_address, &offset, byte_order, &err) {
+      return
+    }
+    if !decode_field(u32, file, &header.file_offset, &offset, byte_order, &err) {
+      return
+    }
+    if !decode_field(u32, file, &header.size, &offset, byte_order, &err) {
+      return
+    }
+  case .Bit_64:
+    if !decode_field(u64, file, &header.flags, &offset, byte_order, &err) {
+      return
+    }
+    if !decode_field(u64, file, &header.virtual_address, &offset, byte_order, &err) {
+      return
+    }
+    if !decode_field(u64, file, &header.file_offset, &offset, byte_order, &err) {
+      return
+    }
+    if !decode_field(u64, file, &header.size, &offset, byte_order, &err) {
+      return
+    }
+  }
+
+  return
+}
+
+decode_program_header :: proc(
+  file: []byte,
+  byte_order: endian.Byte_Order,
+  class: Elf_Class,
+) -> (
+  header: Program_Header,
+  err: Error,
+) {
+
+  length := len(file)
+  if class == .Bit_32 && length < 0x20 {
+    err = Header_Too_Small{length, .Bit_32}
+    return
+  } else if length < 0x38 {
+    err = Header_Too_Small{length, .Bit_64}
+  }
+  offset := 0
+  if !decode_field(u32, file, &header.type, &offset, byte_order, &err) {
+    return
+  }
+
+  #partial switch class {
+  case .Bit_32:
+    if !decode_field(u32, file, &header.offset, &offset, byte_order, &err) {
+      return
+    }
+    if !decode_field(u32, file, &header.virtual_address, &offset, byte_order, &err) {
+      return
+    }
+    if !decode_field(u32, file, &header.physical_address, &offset, byte_order, &err) {
+      return
+    }
+    if !decode_field(u32, file, &header.file_segment_size, &offset, byte_order, &err) {
+      return
+    }
+    if !decode_field(u32, file, &header.memory_segment_size, &offset, byte_order, &err) {
+      return
+    }
+    if !decode_field(u32, file, &header.flags, &offset, byte_order, &err) {
+      return
+    }
+    if !decode_field(u32, file, &header.alignment, &offset, byte_order, &err) {
+      return
+    }
+  case .Bit_64:
+    if !decode_field(u32, file, &header.flags, &offset, byte_order, &err) {
+      return
+    }
+    if !decode_field(u32, file, &header.offset, &offset, byte_order, &err) {
+      return
+    }
+    if !decode_field(u32, file, &header.virtual_address, &offset, byte_order, &err) {
+      return
+    }
+    if !decode_field(u32, file, &header.physical_address, &offset, byte_order, &err) {
+      return
+    }
+    if !decode_field(u32, file, &header.file_segment_size, &offset, byte_order, &err) {
+      return
+    }
+    if !decode_field(u32, file, &header.memory_segment_size, &offset, byte_order, &err) {
+      return
+    }
+    if !decode_field(u32, file, &header.alignment, &offset, byte_order, &err) {
+      return
+    }
+  }
+
+  assert((class == .Bit_32 && offset == 0x20) || offset == 0x38)
   return
 }
 
@@ -172,7 +315,14 @@ decode_elf_header :: proc(file: []byte) -> (header: Elf_Header, err: Error) {
     return
   }
 
-  if !decode_field(u16, file, &header.program_header_table_size, &offset, header.endianness, &err) {
+  if !decode_field(
+    u16,
+    file,
+    &header.program_header_table_size,
+    &offset,
+    header.endianness,
+    &err,
+  ) {
     return
   }
 
@@ -180,7 +330,14 @@ decode_elf_header :: proc(file: []byte) -> (header: Elf_Header, err: Error) {
     return
   }
 
-  if !decode_field(u16, file, &header.section_header_table_size, &offset, header.endianness, &err) {
+  if !decode_field(
+    u16,
+    file,
+    &header.section_header_table_size,
+    &offset,
+    header.endianness,
+    &err,
+  ) {
     return
   }
 
