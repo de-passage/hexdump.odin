@@ -56,10 +56,9 @@ decode_elf_file :: proc(file: []byte) -> (err: Error) {
     fmt.printfln("Segment [%i]", x)
     fmt.println("\tType:", program_header.type)
     fmt.println("\tFlags:", program_header.flags)
-    fmt.println("\tFlags:", program_header.flags)
     fmt.printfln("\tFile offset: 0x%08X\tsize: 0x%08X", program_header.offset, program_header.file_segment_size)
     fmt.printfln("\tMem  offset: 0x%08X\tsize: 0x%08X", program_header.virtual_address, program_header.memory_segment_size)
-    fmt.println("\tAlignment: ", program_header.offset)
+    fmt.printfln("\tAlignment: 0x%X", program_header.alignment)
 
     start_of_program_header += u64(header.program_header_size)
   }
