@@ -113,7 +113,11 @@ main :: proc() {
 
   switch opts.format {
   case File_Format.none:
-    decode_generic_file(file, opts.width)
+    if opts.range.end > 0 {
+      decode_generic_file(file[opts.range.start:min(opts.range.end, u64(len(file)))], opts.width)
+    } else {
+      decode_generic_file(file, opts.width)
+    }
   case File_Format.elf:
     e.decode_elf_file(file)
   }
