@@ -114,7 +114,7 @@ color_mapping_setup :: proc(mapping: string) -> Error {
   if idx > start {
     return Parse_Error{mapping, start, Unexpected_End_Of_String{}}
   }
-  return None{}
+  return nil
 }
 
 @(private)

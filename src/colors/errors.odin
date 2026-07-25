@@ -1,7 +1,6 @@
 package colors
 
 Error :: union {
-  None,
   Parse_Error,
 }
 

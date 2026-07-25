@@ -17,15 +17,7 @@ find_section_name :: proc(section: []byte, offset: u32) -> string {
 }
 
 decode_elf_file :: proc(file: []byte) -> (err: Error) {
-  header: Elf_Header = ---
-  header, err = decode_elf_header(file)
-
-  switch e in err {
-  case Wrong_Magic, Header_Too_Small, Invalid_Elf_Endianess, Invalid_Elf_Class, Conversion_Failed:
-    return
-  case None:
-  }
-  // do something else
+  header := decode_elf_header(file) or_return
 
   fmt.println("Header content:")
   fmt.println("\tElf:", header.class)
@@ -48,22 +40,11 @@ decode_elf_file :: proc(file: []byte) -> (err: Error) {
   start_of_program_header := header.program_header_offset
 
   for x in 0 ..< header.program_header_table_size {
-    program_header: Program_Header = ---
-    program_header, err = decode_program_header(
+    program_header := decode_program_header(
       file[start_of_program_header:],
       header.endianness,
       header.class,
-    )
-
-    switch e in err {
-    case Wrong_Magic,
-         Header_Too_Small,
-         Invalid_Elf_Endianess,
-         Invalid_Elf_Class,
-         Conversion_Failed:
-      return
-    case None:
-    }
+    ) or_return
 
     fmt.printfln("Segment [%i]", x)
     fmt.println("\tType:", program_header.type)
@@ -90,52 +71,30 @@ decode_elf_file :: proc(file: []byte) -> (err: Error) {
 
   start_of_sections_table := header.section_header_offset
 
-  section_names: Section_Header = ---
-  section_names, err = decode_section_header(
+  section_names := decode_section_header(
     file[start_of_sections_table +
     u64(header.section_header_size) * u64(header.section_name_index):],
     header.endianness,
     header.class,
-  )
-  switch e in err {
-  case Wrong_Magic, Header_Too_Small, Invalid_Elf_Class, Invalid_Elf_Endianess, Conversion_Failed:
-    return
-  case None:
-  }
+  ) or_return
 
 
   section_names_strings := file[section_names.file_offset:section_names.file_offset +
   section_names.size]
 
   for x in 0 ..< header.section_header_table_size {
-    section_header: Section_Header = ---
-
-    section_header, err = decode_section_header(
+    section_header := decode_section_header(
       file[start_of_sections_table:],
       header.endianness,
       header.class,
-    )
-
-    switch e in err {
-    case Wrong_Magic,
-         Header_Too_Small,
-         Invalid_Elf_Class,
-         Invalid_Elf_Endianess,
-         Conversion_Failed:
-      return
-    case None:
-    }
+    ) or_return
 
     fmt.printfln("Section [%i]", x)
-    fmt.printf(
-      "\tName offset: 0x%X",
-      section_header.name
-    )
+    fmt.printf("\tName offset: 0x%X", section_header.name)
     section_name := find_section_name(section_names_strings, section_header.name)
     if section_name != "" {
       fmt.printfln(" (%s)", section_name)
-    }
-    else {
+    } else {
       fmt.println()
     }
     fmt.println("\tType:", section_header.type)
@@ -150,7 +109,7 @@ decode_elf_file :: proc(file: []byte) -> (err: Error) {
     start_of_sections_table += u64(header.section_header_size)
   }
 
-  return None{}
+  return
 }
 
 @(private)

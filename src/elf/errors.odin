@@ -1,6 +1,5 @@
 package elf
 
-None :: struct {}
 Wrong_Magic :: struct {}
 
 Header_Too_Small :: struct {
@@ -17,7 +16,6 @@ Invalid_Elf_Class :: distinct Invalid_Value
 Invalid_Elf_Endianess :: distinct Invalid_Value
 
 Error :: union {
-  None,
   Wrong_Magic,
   Header_Too_Small,
   Invalid_Elf_Class,

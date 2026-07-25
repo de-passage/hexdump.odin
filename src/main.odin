@@ -57,15 +57,11 @@ handle_color_mapping_error :: proc(mapping_error: c.Error) {
     fmt.println('^')
     c.eprint_ansi_code(ansi.CSI, ansi.RESET, ansi.SGR)
     os.exit(1)
-
-  case c.None:
-  // good
   }
 }
 
 handle_elf_decoding_error :: proc(elf_error: e.Error) {
   switch err in elf_error {
-  case e.None:
   case e.Invalid_Elf_Endianess:
     fmt.eprintfln("Invalid ELF class: %v", err.value)
     os.exit(1)
