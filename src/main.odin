@@ -63,6 +63,32 @@ handle_color_mapping_error :: proc(mapping_error: c.Error) {
   }
 }
 
+handle_elf_decoding_error :: proc(elf_error: e.Error) {
+  switch err in elf_error {
+  case e.None:
+  case e.Invalid_Elf_Endianess:
+    fmt.eprintfln("Invalid ELF class: %v", err.value)
+    os.exit(1)
+  case e.Conversion_Failed:
+    fmt.eprintln("Conversion failed")
+    os.exit(1)
+  case e.Wrong_Magic:
+    fmt.eprintln("Wrong magic byte, is this really an ELF file?")
+    os.exit(1)
+  case e.Header_Too_Small:
+    fmt.eprintfln(
+      "Header size too small (%i) for %v. Header size should be at least %i",
+      err.length,
+      err.class,
+      err.required,
+    )
+    os.exit(1)
+  case e.Invalid_Elf_Class:
+
+  }
+
+}
+
 main :: proc() {
   opts, file := parse_arguments()
   defer delete(file)
@@ -119,7 +145,7 @@ main :: proc() {
       decode_generic_file(file, opts.width)
     }
   case File_Format.elf:
-    e.decode_elf_file(file)
+    handle_elf_decoding_error(e.decode_elf_file(file))
   }
 }
 

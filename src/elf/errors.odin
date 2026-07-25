@@ -4,8 +4,9 @@ None :: struct {}
 Wrong_Magic :: struct {}
 
 Header_Too_Small :: struct {
-  length: int,
-  class:  Elf_Class,
+  length:   int,
+  class:    Elf_Class,
+  required: int,
 }
 
 Invalid_Value :: struct {

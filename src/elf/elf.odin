@@ -3,6 +3,18 @@ package elf
 import "core:encoding/endian"
 import "core:fmt"
 import "core:slice"
+import "core:strings"
+
+find_section_name :: proc(section: []byte, offset: u32) -> string {
+  section_string_start := string(section[offset:])
+
+  end := strings.index_byte(section_string_start, 0)
+  if end < 0 {
+    end = len(section)
+  }
+
+  return end == 0 ? "" : section_string_start[:end - 1]
+}
 
 decode_elf_file :: proc(file: []byte) -> (err: Error) {
   header: Elf_Header = ---
@@ -56,11 +68,86 @@ decode_elf_file :: proc(file: []byte) -> (err: Error) {
     fmt.printfln("Segment [%i]", x)
     fmt.println("\tType:", program_header.type)
     fmt.println("\tFlags:", program_header.flags)
-    fmt.printfln("\tFile offset: 0x%08X\tsize: 0x%08X", program_header.offset, program_header.file_segment_size)
-    fmt.printfln("\tMem  offset: 0x%08X\tsize: 0x%08X", program_header.virtual_address, program_header.memory_segment_size)
+    fmt.printfln(
+      "\tFile offset: 0x%08X\tsize: 0x%08X",
+      program_header.offset,
+      program_header.file_segment_size,
+    )
+    fmt.printfln(
+      "\tMem  offset: 0x%08X\tsize: 0x%08X",
+      program_header.virtual_address,
+      program_header.memory_segment_size,
+    )
     fmt.printfln("\tAlignment: 0x%X", program_header.alignment)
+    if program_header.type == .PT_INTERP {
+      start := program_header.offset
+      end := start + program_header.file_segment_size - 1 // 0-delimited string
+      fmt.printfln("\t%s", file[start:end])
+    }
 
     start_of_program_header += u64(header.program_header_size)
+  }
+
+  start_of_sections_table := header.section_header_offset
+
+  section_names: Section_Header = ---
+  section_names, err = decode_section_header(
+    file[start_of_sections_table +
+    u64(header.section_header_size) * u64(header.section_name_index):],
+    header.endianness,
+    header.class,
+  )
+  switch e in err {
+  case Wrong_Magic, Header_Too_Small, Invalid_Elf_Class, Invalid_Elf_Endianess, Conversion_Failed:
+    return
+  case None:
+  }
+
+
+  section_names_strings := file[section_names.file_offset:section_names.file_offset +
+  section_names.size]
+
+  for x in 0 ..< header.section_header_table_size {
+    section_header: Section_Header = ---
+
+    section_header, err = decode_section_header(
+      file[start_of_sections_table:],
+      header.endianness,
+      header.class,
+    )
+
+    switch e in err {
+    case Wrong_Magic,
+         Header_Too_Small,
+         Invalid_Elf_Class,
+         Invalid_Elf_Endianess,
+         Conversion_Failed:
+      return
+    case None:
+    }
+
+    fmt.printfln("Section [%i]", x)
+    fmt.printf(
+      "\tName offset: 0x%X",
+      section_header.name
+    )
+    section_name := find_section_name(section_names_strings, section_header.name)
+    if section_name != "" {
+      fmt.printfln(" (%s)", section_name)
+    }
+    else {
+      fmt.println()
+    }
+    fmt.println("\tType:", section_header.type)
+    fmt.printfln("\tMemory Address: 0x%08X", section_header.virtual_address)
+    fmt.printfln("\tFile Address: 0x%08X", section_header.file_offset)
+    fmt.printfln("\tSize: 0x%X", section_header.size)
+    fmt.printfln("\tLink: 0x%X", section_header.link)
+    fmt.printfln("\tInfo: 0x%X", section_header.info)
+    fmt.printfln("\tAlignment: 0x%X", section_header.alignment)
+    fmt.printfln("\tEntry size: 0x%X", section_header.entry_size)
+
+    start_of_sections_table += u64(header.section_header_size)
   }
 
   return None{}
@@ -109,10 +196,10 @@ decode_section_header :: proc(
 ) {
   length := len(file)
   if class == .Bit_32 && length < 0x28 {
-    err = Header_Too_Small{length, .Bit_32}
+    err = Header_Too_Small{length, .Bit_32, 0x28}
     return
   } else if length < 0x40 {
-    err = Header_Too_Small{length, .Bit_64}
+    err = Header_Too_Small{length, .Bit_64, 0x40}
   }
   offset := 0
 
@@ -191,10 +278,10 @@ decode_program_header :: proc(
 
   length := len(file)
   if class == .Bit_32 && length < 0x20 {
-    err = Header_Too_Small{length, .Bit_32}
+    err = Header_Too_Small{length, .Bit_32, 0x20}
     return
   } else if length < 0x38 {
-    err = Header_Too_Small{length, .Bit_64}
+    err = Header_Too_Small{length, .Bit_64, 0x38}
   }
   offset := 0
   if !decode_field(u32, file, &header.type, &offset, byte_order, &err) {
@@ -260,7 +347,7 @@ decode_elf_header :: proc(file: []byte) -> (header: Elf_Header, err: Error) {
   }
 
   if length < 5 {
-    err = Header_Too_Small{length, .Invalid}
+    err = Header_Too_Small{length, .Invalid, 5}
     return
   }
 
@@ -269,12 +356,12 @@ decode_elf_header :: proc(file: []byte) -> (header: Elf_Header, err: Error) {
   switch header.class {
   case .Bit_64:
     if length < 64 {
-      err = Header_Too_Small{length, .Bit_64}
+      err = Header_Too_Small{length, .Bit_64, 64}
       return
     }
   case .Bit_32:
     if header.class == Elf_Class.Bit_64 && length < 52 {
-      err = Header_Too_Small{length, .Bit_32}
+      err = Header_Too_Small{length, .Bit_32, 52}
       return
     }
 
