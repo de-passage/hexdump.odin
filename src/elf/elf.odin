@@ -98,6 +98,7 @@ decode_elf_file :: proc(file: []byte) -> (err: Error) {
       fmt.println()
     }
     fmt.println("\tType:", section_header.type)
+    fmt.println("\tFlags:", section_header.flags)
     fmt.printfln("\tMemory Address: 0x%08X", section_header.virtual_address)
     fmt.printfln("\tFile Address: 0x%08X", section_header.file_offset)
     fmt.printfln("\tSize: 0x%X", section_header.size)
