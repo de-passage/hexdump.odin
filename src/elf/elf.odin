@@ -68,6 +68,7 @@ decode_elf_file :: proc(file: []byte) -> (err: Error) {
 
     start_of_program_header += u64(header.program_header_size)
   }
+  fmt.println()
 
   start_of_sections_table := header.section_header_offset
 
@@ -109,6 +110,7 @@ decode_elf_file :: proc(file: []byte) -> (err: Error) {
 
     start_of_sections_table += u64(header.section_header_size)
   }
+  fmt.println()
 
   return
 }

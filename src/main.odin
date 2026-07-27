@@ -1,6 +1,7 @@
 #+feature dynamic-literals
 package hexdump
 
+import "core:flags"
 import "core:fmt"
 import "core:io"
 import "core:math"
@@ -14,8 +15,34 @@ import e "elf"
 
 SCRATCH_BUFFER_SIZE :: #config(SCRATCH_BUFFER_SIZE, 1024)
 
+handle_cli_error :: proc(error: Cli_Error, program_name: string) {
+  switch err in error {
+  case nil:
+    return
+  case flags.Error:
+    switch e in err {
+    case flags.Parse_Error:
+      fmt.eprintln(e.message)
+    case flags.Validation_Error:
+      fmt.eprintln(e.message)
+    case flags.Help_Request:
+      print_usage(program_name)
+      os.exit(0)
+    case flags.Open_File_Error:
+      fmt.eprintfln("Failed to open '%s'", e.filename)
+    }
+  case Empty_File_Name:
+    print_usage(program_name, out = os.stderr)
+  case Incompatible_Options:
+    fmt.eprintln(err.reason)
+  }
+  os.exit(1)
+}
+
 handle_color_mapping_error :: proc(mapping_error: c.Error) {
   switch parse_error in mapping_error {
+  case nil:
+    return
   case c.Parse_Error:
     c.eprint_ansi_code(ansi.CSI, ansi.FG_RED, ansi.SGR)
     fmt.eprintln("Error while parsing color mapping: ")
@@ -62,15 +89,14 @@ handle_color_mapping_error :: proc(mapping_error: c.Error) {
 
 handle_elf_decoding_error :: proc(elf_error: e.Error) {
   switch err in elf_error {
+  case nil:
+    return
   case e.Invalid_Elf_Endianess:
     fmt.eprintfln("Invalid ELF class: %v", err.value)
-    os.exit(1)
   case e.Conversion_Failed:
     fmt.eprintln("Conversion failed")
-    os.exit(1)
   case e.Wrong_Magic:
     fmt.eprintln("Wrong magic byte, is this really an ELF file?")
-    os.exit(1)
   case e.Header_Too_Small:
     fmt.eprintfln(
       "Header size too small (%i) for %v. Header size should be at least %i",
@@ -78,18 +104,26 @@ handle_elf_decoding_error :: proc(elf_error: e.Error) {
       err.class,
       err.required,
     )
-    os.exit(1)
   case e.Invalid_Elf_Class:
-
+    fmt.eprintfln("Invalid elf class (%i).", err.value)
   }
-
+  os.exit(1)
 }
 
 main :: proc() {
-  opts, file := parse_arguments()
+  opts, err := parse_arguments()
+  handle_cli_error(err, opts.program_name)
+
+  file, ok := os.read_entire_file(opts.target_file, context.allocator)
+  if ok != os.ERROR_NONE {
+    fmt.eprintfln("Failed to open '%s'", opts.target_file)
+    os.exit(1)
+  }
   defer delete(file)
 
-  fmt.set_user_formatters(new(map[typeid]fmt.User_Formatter))
+  formatters := new(map[typeid]fmt.User_Formatter)
+  defer free(formatters)
+  fmt.set_user_formatters(formatters)
   e.register_custom_formatters()
 
   buf: [SCRATCH_BUFFER_SIZE]u8

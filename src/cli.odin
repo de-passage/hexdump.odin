@@ -33,50 +33,43 @@ Address_Range :: struct {
   end:   u64,
 }
 
-print_usage :: proc(program_name: string) {
-  fmt.printfln(
+Cli_Error :: union {
+  flags.Error,
+  Empty_File_Name,
+  Incompatible_Options,
+}
+Empty_File_Name :: struct {}
+Incompatible_Options :: struct {
+  reason: string,
+}
+
+print_usage :: proc(program_name: string, out: ^os.File = os.stdout) {
+  fmt.fprintfln(
+    out,
     "Usage:\n" + "\t%s FILE [--width WIDTH] [--color auto|always|never] [--color_mapping MAPPING]",
     program_name,
   )
 }
 
-parse_arguments :: proc() -> (opts: Options, file: []byte) {
+parse_arguments :: proc() -> (opts: Options, err: Cli_Error) {
   style: flags.Parsing_Style = .Unix
   flags.register_type_setter(cli_parser)
 
   opts.width = 16
-  error := flags.parse(&opts, os.args, style)
-
-  switch e in error {
-  case flags.Parse_Error:
-    fmt.eprintln(e.message)
-    os.exit(1)
-  case flags.Validation_Error:
-    fmt.eprintln(e.message)
-    os.exit(1)
-  case flags.Help_Request:
-    print_usage(opts.program_name)
-    os.exit(0)
-  case flags.Open_File_Error:
-    fmt.eprintfln("Failed to open '%s'", e.filename)
-    os.exit(1)
+  parse_err := flags.parse(&opts, os.args, style)
+  if parse_err != nil {
+    err = parse_err
+    return
   }
 
   if (opts.target_file == "") {
-    print_usage(opts.program_name)
-    os.exit(1)
+    err = Empty_File_Name{}
+    return
   }
 
   if opts.range.end != 0 && opts.format != .none {
-    fmt.eprintfln("Range is only available for default format")
-    os.exit(1)
-  }
-
-  ok: os.Error
-  file, ok = os.read_entire_file(opts.target_file, context.allocator)
-  if ok != os.ERROR_NONE {
-    fmt.eprintfln("Failed to open '%s'", opts.target_file)
-    os.exit(1)
+    err = Incompatible_Options{"Range is only available for default format"}
+    return
   }
 
   return
