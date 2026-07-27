@@ -1,4 +1,4 @@
-package hexdump
+package cli
 
 import "base:runtime"
 import "core:flags"
@@ -51,12 +51,12 @@ print_usage :: proc(program_name: string, out: ^os.File = os.stdout) {
   )
 }
 
-parse_arguments :: proc() -> (opts: Options, err: Cli_Error) {
+parse_arguments :: proc(args: []string) -> (opts: Options, err: Cli_Error) {
   style: flags.Parsing_Style = .Unix
   flags.register_type_setter(cli_parser)
 
   opts.width = 16
-  parse_err := flags.parse(&opts, os.args, style)
+  parse_err := flags.parse(&opts, args, style)
   if parse_err != nil {
     err = parse_err
     return
