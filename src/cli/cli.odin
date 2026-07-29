@@ -15,6 +15,9 @@ Options :: struct {
   color_mapping: string `usage:"Customize color"`,
   format:        File_Format `usage:"Output format"`,
   range:         Address_Range `usage:"start:end"`,
+  section:       Maybe(u64) `usage:"What section in an ELF file"`,
+  segment:       Maybe(u64) `usage:"What segment in an ELF file"`,
+  dump:          bool `usage:"Show hexdump in ELF decoding mode"`,
 }
 
 File_Format :: enum {
@@ -67,8 +70,20 @@ parse_arguments :: proc(args: []string) -> (opts: Options, err: Cli_Error) {
     return
   }
 
-  if opts.range.end != 0 && opts.format != .none {
-    err = Incompatible_Options{"Range is only available for default format"}
+  if opts.format != .none {
+    if opts.range.end != 0 {
+      err = Incompatible_Options{"--range is only available for default format (--format=none)"}
+    }
+  }
+  if opts.format != .elf {
+    if opts.segment != nil {
+      err = Incompatible_Options{"--segment is only available for ELF format (--format=elf)"}
+    }
+    if opts.section != nil {
+      err = Incompatible_Options{"--section is only available for ELF format (--format=elf)"}
+    }
+  }
+  if err != nil {
     return
   }
 
@@ -129,6 +144,15 @@ cli_parser :: proc(
     handled = true
     range := cast(^Address_Range)data
     error = parse_range(range, unparsed_value)
+    return
+  } else if id == Maybe(u64) {
+    handled = true
+    maybe := cast(^Maybe(u64))data
+    ok: bool = ---
+    maybe^, ok = strconv.parse_u64(unparsed_value)
+    if !ok {
+      error = "Failed to parse integer"
+    }
     return
   }
   return

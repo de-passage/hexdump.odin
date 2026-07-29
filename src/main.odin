@@ -1,20 +1,18 @@
 #+feature dynamic-literals
 package hexdump
 
-import "core:flags"
 import "core:fmt"
 import "core:io"
-import "core:math"
 import "core:os"
 import "core:sys/posix"
 import "core:terminal/ansi"
-import "core:unicode"
 
 import "cli"
 import c "colors"
 import e "elf"
 
 SCRATCH_BUFFER_SIZE :: #config(SCRATCH_BUFFER_SIZE, 1024)
+buf: [SCRATCH_BUFFER_SIZE]u8
 
 main :: proc() {
   opts, err := cli.parse_arguments(os.args)
@@ -32,8 +30,29 @@ main :: proc() {
   fmt.set_user_formatters(formatters)
   e.register_custom_formatters()
 
-  buf: [SCRATCH_BUFFER_SIZE]u8
+  setup_colors(opts)
 
+  switch opts.format {
+  case .none:
+    if opts.range.end > 0 {
+      decode_generic_buffer(file[opts.range.start:min(opts.range.end, u64(len(file)))], opts.width)
+    } else {
+      decode_generic_buffer(file, opts.width)
+    }
+  case .elf:
+    handle_elf_decoding_error(e.decode_elf_file(file))
+  }
+}
+
+fill_spaces :: proc(last_byte: int, target_byte: int, content: string) {
+  if (last_byte < target_byte) {
+    for i in 0 ..< (target_byte - last_byte) {
+      fmt.printf(content)
+    }
+  }
+}
+
+setup_colors :: proc(opts: cli.Options) {
   // Should we use color at all?
   output_on_tty := bool(posix.isatty(posix.STDOUT_FILENO))
   no_color_value, _ := os.lookup_env_buf(buf[:], "NO_COLOR")
@@ -71,61 +90,5 @@ main :: proc() {
     }
 
     c.default_color_setup()
-  }
-
-  switch opts.format {
-  case .none:
-    if opts.range.end > 0 {
-      decode_generic_file(file[opts.range.start:min(opts.range.end, u64(len(file)))], opts.width)
-    } else {
-      decode_generic_file(file, opts.width)
-    }
-  case .elf:
-    handle_elf_decoding_error(e.decode_elf_file(file))
-  }
-}
-
-fill_spaces :: proc(last_byte: int, target_byte: int, content: string) {
-  if (last_byte < target_byte) {
-    for i in 0 ..< (target_byte - last_byte) {
-      fmt.printf(content)
-    }
-  }
-}
-
-decode_generic_file :: proc(file: []byte, width: int) {
-  first_byte := 0
-
-  for first_byte < len(file) {
-    last_byte := math.min(first_byte + width, len(file))
-
-    line := file[first_byte:last_byte]
-
-    c.print_ansi_code(ansi.CSI, c.COLOR_ADDRESS.value, ansi.SGR)
-    fmt.printf("%08X ", first_byte)
-    last := c.Colorable_Type.NONE
-    for char in line {
-      last = c.print_character_colored(char, last, proc(char: byte) {
-        fmt.printf("%02X ", char)
-      })
-    }
-    fill_spaces(last_byte, first_byte + width, "   ")
-
-    for char in line {
-      last = c.print_character_colored(char, last, proc(char: byte) {
-        if char < unicode.MAX_ASCII &&
-           unicode.is_print(rune(char)) &&
-           !unicode.is_space(rune(char)) {
-          fmt.print(rune(char))
-        } else {
-          fmt.print('.')
-        }
-      })
-    }
-    fill_spaces(last_byte, first_byte + width, " ")
-
-    fmt.println(ansi.CSI + ansi.RESET + ansi.SGR)
-
-    first_byte += width
   }
 }

@@ -16,9 +16,31 @@ find_section_name :: proc(section: []byte, offset: u32) -> string {
   return end == 0 ? "" : section_string_start[:end - 1]
 }
 
-decode_elf_file :: proc(file: []byte) -> (err: Error) {
-  header := decode_elf_header(file) or_return
+show_program_header :: proc(file: []byte, header: Elf_Header, program_header: Program_Header) -> (err: Error) {
 
+  fmt.println("\tType:", program_header.type)
+  fmt.println("\tFlags:", program_header.flags)
+  fmt.printfln(
+    "\tFile offset: 0x%08X\tsize: 0x%08X",
+    program_header.offset,
+    program_header.file_segment_size,
+  )
+  fmt.printfln(
+    "\tMem  offset: 0x%08X\tsize: 0x%08X",
+    program_header.virtual_address,
+    program_header.memory_segment_size,
+  )
+  fmt.printfln("\tAlignment: 0x%X", program_header.alignment)
+  if program_header.type == .PT_INTERP {
+    start := program_header.offset
+    end := start + program_header.file_segment_size - 1 // 0-delimited string
+    fmt.printfln("\t%s", file[start:end])
+  }
+
+  return
+}
+
+show_elf_header ::proc(header: Elf_Header) {
   fmt.println("Header content:")
   fmt.println("\tElf:", header.class)
   fmt.println("\tType:", header.type)
@@ -36,35 +58,43 @@ decode_elf_file :: proc(file: []byte) -> (err: Error) {
   fmt.println("\t\tSection Name Index:", header.section_name_index)
   fmt.printfln("\tFlags: %X", header.flags)
   fmt.println()
+}
+
+show_section_header :: proc(section_header: Section_Header, section_name_strings: []byte) {
+    fmt.printf("\tName offset: 0x%X", section_header.name)
+    section_name := find_section_name(section_name_strings, section_header.name)
+    if section_name != "" {
+      fmt.printfln(" (%s)", section_name)
+    } else {
+      fmt.println()
+    }
+    fmt.println("\tType:", section_header.type)
+    fmt.println("\tFlags:", section_header.flags)
+    fmt.printfln("\tMemory Address: 0x%08X", section_header.virtual_address)
+    fmt.printfln("\tFile Address: 0x%08X", section_header.file_offset)
+    fmt.printfln("\tSize: 0x%X", section_header.size)
+    fmt.printfln("\tLink: 0x%X", section_header.link)
+    fmt.printfln("\tInfo: 0x%X", section_header.info)
+    fmt.printfln("\tAlignment: 0x%X", section_header.alignment)
+    fmt.printfln("\tEntry size: 0x%X", section_header.entry_size)
+}
+
+decode_elf_file :: proc(file: []byte) -> (err: Error) {
+  header := decode_elf_header(file) or_return
+
+  show_elf_header(header)
 
   start_of_program_header := header.program_header_offset
 
   for x in 0 ..< header.program_header_table_size {
+
+    fmt.printfln("Segment [%i]", x)
     program_header := decode_program_header(
       file[start_of_program_header:],
       header.endianness,
       header.class,
     ) or_return
-
-    fmt.printfln("Segment [%i]", x)
-    fmt.println("\tType:", program_header.type)
-    fmt.println("\tFlags:", program_header.flags)
-    fmt.printfln(
-      "\tFile offset: 0x%08X\tsize: 0x%08X",
-      program_header.offset,
-      program_header.file_segment_size,
-    )
-    fmt.printfln(
-      "\tMem  offset: 0x%08X\tsize: 0x%08X",
-      program_header.virtual_address,
-      program_header.memory_segment_size,
-    )
-    fmt.printfln("\tAlignment: 0x%X", program_header.alignment)
-    if program_header.type == .PT_INTERP {
-      start := program_header.offset
-      end := start + program_header.file_segment_size - 1 // 0-delimited string
-      fmt.printfln("\t%s", file[start:end])
-    }
+    show_program_header(file, header, program_header)
 
     start_of_program_header += u64(header.program_header_size)
   }
@@ -80,7 +110,7 @@ decode_elf_file :: proc(file: []byte) -> (err: Error) {
   ) or_return
 
 
-  section_names_strings := file[section_names.file_offset:section_names.file_offset +
+  section_name_strings := file[section_names.file_offset:section_names.file_offset +
   section_names.size]
 
   for x in 0 ..< header.section_header_table_size {
@@ -91,22 +121,7 @@ decode_elf_file :: proc(file: []byte) -> (err: Error) {
     ) or_return
 
     fmt.printfln("Section [%i]", x)
-    fmt.printf("\tName offset: 0x%X", section_header.name)
-    section_name := find_section_name(section_names_strings, section_header.name)
-    if section_name != "" {
-      fmt.printfln(" (%s)", section_name)
-    } else {
-      fmt.println()
-    }
-    fmt.println("\tType:", section_header.type)
-    fmt.println("\tFlags:", section_header.flags)
-    fmt.printfln("\tMemory Address: 0x%08X", section_header.virtual_address)
-    fmt.printfln("\tFile Address: 0x%08X", section_header.file_offset)
-    fmt.printfln("\tSize: 0x%X", section_header.size)
-    fmt.printfln("\tLink: 0x%X", section_header.link)
-    fmt.printfln("\tInfo: 0x%X", section_header.info)
-    fmt.printfln("\tAlignment: 0x%X", section_header.alignment)
-    fmt.printfln("\tEntry size: 0x%X", section_header.entry_size)
+    show_section_header(section_header,section_name_strings)
 
     start_of_sections_table += u64(header.section_header_size)
   }
