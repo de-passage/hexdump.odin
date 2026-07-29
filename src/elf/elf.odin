@@ -1,134 +1,7 @@
 package elf
 
 import "core:encoding/endian"
-import "core:fmt"
 import "core:slice"
-import "core:strings"
-
-find_section_name :: proc(section: []byte, offset: u32) -> string {
-  section_string_start := string(section[offset:])
-
-  end := strings.index_byte(section_string_start, 0)
-  if end < 0 {
-    end = len(section)
-  }
-
-  return end == 0 ? "" : section_string_start[:end - 1]
-}
-
-show_program_header :: proc(file: []byte, header: Elf_Header, program_header: Program_Header) -> (err: Error) {
-
-  fmt.println("\tType:", program_header.type)
-  fmt.println("\tFlags:", program_header.flags)
-  fmt.printfln(
-    "\tFile offset: 0x%08X\tsize: 0x%08X",
-    program_header.offset,
-    program_header.file_segment_size,
-  )
-  fmt.printfln(
-    "\tMem  offset: 0x%08X\tsize: 0x%08X",
-    program_header.virtual_address,
-    program_header.memory_segment_size,
-  )
-  fmt.printfln("\tAlignment: 0x%X", program_header.alignment)
-  if program_header.type == .PT_INTERP {
-    start := program_header.offset
-    end := start + program_header.file_segment_size - 1 // 0-delimited string
-    fmt.printfln("\t%s", file[start:end])
-  }
-
-  return
-}
-
-show_elf_header ::proc(header: Elf_Header) {
-  fmt.println("Header content:")
-  fmt.println("\tElf:", header.class)
-  fmt.println("\tType:", header.type)
-  fmt.println("\tEndianness:", header.endianness)
-  fmt.println("\tArch:", header.machine)
-  fmt.println("\tABI:", header.abi)
-  fmt.println("\tSize:", header.size)
-  fmt.printfln("\tEntry point: 0x%08X", header.entry_point)
-  fmt.printfln("\tProgram Header: 0x%08X", header.program_header_offset)
-  fmt.println("\t\tProgram Header Size:", header.program_header_size)
-  fmt.println("\t\tProgram Header Table Size:", header.program_header_table_size)
-  fmt.printfln("\tSection Header: 0x%08X", header.section_header_offset)
-  fmt.println("\t\tProgram Section Size:", header.section_header_size)
-  fmt.println("\t\tProgram Section Table Size:", header.section_header_table_size)
-  fmt.println("\t\tSection Name Index:", header.section_name_index)
-  fmt.printfln("\tFlags: %X", header.flags)
-  fmt.println()
-}
-
-show_section_header :: proc(section_header: Section_Header, section_name_strings: []byte) {
-    fmt.printf("\tName offset: 0x%X", section_header.name)
-    section_name := find_section_name(section_name_strings, section_header.name)
-    if section_name != "" {
-      fmt.printfln(" (%s)", section_name)
-    } else {
-      fmt.println()
-    }
-    fmt.println("\tType:", section_header.type)
-    fmt.println("\tFlags:", section_header.flags)
-    fmt.printfln("\tMemory Address: 0x%08X", section_header.virtual_address)
-    fmt.printfln("\tFile Address: 0x%08X", section_header.file_offset)
-    fmt.printfln("\tSize: 0x%X", section_header.size)
-    fmt.printfln("\tLink: 0x%X", section_header.link)
-    fmt.printfln("\tInfo: 0x%X", section_header.info)
-    fmt.printfln("\tAlignment: 0x%X", section_header.alignment)
-    fmt.printfln("\tEntry size: 0x%X", section_header.entry_size)
-}
-
-decode_elf_file :: proc(file: []byte) -> (err: Error) {
-  header := decode_elf_header(file) or_return
-
-  show_elf_header(header)
-
-  start_of_program_header := header.program_header_offset
-
-  for x in 0 ..< header.program_header_table_size {
-
-    fmt.printfln("Segment [%i]", x)
-    program_header := decode_program_header(
-      file[start_of_program_header:],
-      header.endianness,
-      header.class,
-    ) or_return
-    show_program_header(file, header, program_header)
-
-    start_of_program_header += u64(header.program_header_size)
-  }
-  fmt.println()
-
-  start_of_sections_table := header.section_header_offset
-
-  section_names := decode_section_header(
-    file[start_of_sections_table +
-    u64(header.section_header_size) * u64(header.section_name_index):],
-    header.endianness,
-    header.class,
-  ) or_return
-
-
-  section_name_strings := file[section_names.file_offset:section_names.file_offset +
-  section_names.size]
-
-  for x in 0 ..< header.section_header_table_size {
-    section_header := decode_section_header(
-      file[start_of_sections_table:],
-      header.endianness,
-      header.class,
-    ) or_return
-
-    fmt.printfln("Section [%i]", x)
-    show_section_header(section_header,section_name_strings)
-
-    start_of_sections_table += u64(header.section_header_size)
-  }
-  fmt.println()
-
-  return
-}
 
 @(private)
 decode_field :: proc(
@@ -447,5 +320,37 @@ decode_elf_header :: proc(file: []byte) -> (header: Elf_Header, err: Error) {
 
   assert((header.class == .Bit_32 && offset == 0x34) || offset == 0x40)
 
+  return
+}
+
+compute_section_header_boundaries :: proc(header: Elf_Header, section_index: u64) -> (start: u64, end: u64) {
+  start = header.section_header_offset + u64(header.section_header_table_size) * section_index
+  end = start + u64(header.section_header_size)
+  return
+}
+
+slice_section_header :: proc(header: Elf_Header, section_index: u64, file: []byte) -> (section: []byte) {
+  start, end := compute_section_header_boundaries(header, section_index)
+  return file[start:end]
+}
+
+compute_program_header_boundaries :: proc(header: Elf_Header, section_index: u64) -> (start: u64, end: u64) {
+  start = header.section_header_offset + u64(header.section_header_table_size) * section_index
+  end = start + u64(header.section_header_size)
+  return
+}
+
+slice_program_header :: proc(header: Elf_Header, section_index: u64, file: []byte) -> (section: []byte) {
+  start, end := compute_program_header_boundaries(header, section_index)
+  return file[start:end]
+}
+
+slice_section :: proc(section_header: Section_Header, file: []byte) -> (section: []byte) {
+  section = file[section_header.file_offset: section_header.file_offset + section_header.size]
+  return
+}
+
+slice_segment :: proc(header: Elf_Header, program_header: Program_Header, file: []byte) -> (section: []byte) {
+  section = file[program_header.offset: program_header.file_segment_size + program_header.offset]
   return
 }

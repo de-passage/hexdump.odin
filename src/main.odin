@@ -1,6 +1,7 @@
 #+feature dynamic-literals
 package hexdump
 
+import "core:strings"
 import "core:fmt"
 import "core:io"
 import "core:os"
@@ -40,7 +41,7 @@ main :: proc() {
       decode_generic_buffer(file, opts.width)
     }
   case .elf:
-    handle_elf_decoding_error(e.decode_elf_file(file))
+    handle_elf_decoding_error(decode_elf_file(file, opts.dump ? Should_Dump{opts.width} : nil))
   }
 }
 
@@ -92,3 +93,16 @@ setup_colors :: proc(opts: cli.Options) {
     c.default_color_setup()
   }
 }
+
+@(private)
+find_section_name :: proc(section: []byte, offset: u32) -> string {
+  section_string_start := string(section[offset:])
+
+  end := strings.index_byte(section_string_start, 0)
+  if end < 0 {
+    end = len(section)
+  }
+
+  return end == 0 ? "" : section_string_start[:end - 1]
+}
+
