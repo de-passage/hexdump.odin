@@ -187,21 +187,50 @@ decode_elf_file :: proc(file: []byte, dump: Maybe(Should_Dump) = nil) -> (err: e
   return
 }
 
-decode_single_section_header :: proc(
-  file: []byte,
-  section: u64,
-  dump: Maybe(Should_Dump),
-) -> (
-  err: e.Error,
-) {
+decode_single_section :: proc(file: []byte, section: u64, dump: Maybe(Should_Dump)) -> (err: e.Error) {
   header := e.decode_elf_header(file) or_return
 
-  section_bytes := e.slice_section_header(header, section, file)
-  section_name_strings := e.slice_section_header(header, u64(header.section_name_index), file)
-  section_header := e.decode_section_header(section_bytes, header.endianness, header.class) or_return
+  section_header_bytes := e.slice_section_header(header, section, file)
+  section_header := e.decode_section_header(
+    section_header_bytes,
+    header.endianness,
+    header.class,
+  ) or_return
+
+  section_name_header := e.decode_section_header(
+    e.slice_section_header(header, u64(header.section_name_index), file),
+    header.endianness,
+    header.class,
+  ) or_return
+  section_name_strings := e.slice_section(section_name_header, file)
 
   show_section_header(section_header, section_name_strings)
+  dump_if_needed(section_header_bytes, dump)
+  fmt.println()
+
+  section_bytes := e.slice_section(section_header, file)
   dump_if_needed(section_bytes, dump)
+
+  return
+}
+
+decode_single_segment :: proc(file: []byte, segment: u64, dump: Maybe(Should_Dump)) -> (err: e.Error) {
+  header := e.decode_elf_header(file) or_return
+
+  program_header_bytes := e.slice_program_header(header, segment, file)
+
+  program_header := e.decode_program_header(
+    program_header_bytes,
+    header.endianness,
+    header.class,
+  ) or_return
+
+  show_program_header(file, header, program_header)
+  dump_if_needed(program_header_bytes, dump)
+  fmt.println()
+
+  segment_bytes := e.slice_segment(program_header, file)
+  dump_if_needed(segment_bytes, dump)
 
   return
 }

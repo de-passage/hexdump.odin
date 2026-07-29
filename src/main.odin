@@ -1,10 +1,10 @@
 #+feature dynamic-literals
 package hexdump
 
-import "core:strings"
 import "core:fmt"
 import "core:io"
 import "core:os"
+import "core:strings"
 import "core:sys/posix"
 import "core:terminal/ansi"
 
@@ -41,7 +41,14 @@ main :: proc() {
       decode_generic_buffer(file, opts.width)
     }
   case .elf:
-    handle_elf_decoding_error(decode_elf_file(file, opts.dump ? Should_Dump{opts.width} : nil))
+    should_dump : Maybe(Should_Dump) = opts.dump ? Should_Dump{opts.width} : nil
+    if opts.section != nil {
+      decode_single_section(file, opts.section.?, should_dump)
+    } else if opts.segment != nil {
+      decode_single_segment(file, opts.segment.?, should_dump)
+    } else {
+      handle_elf_decoding_error(decode_elf_file(file, should_dump))
+    }
   }
 }
 
@@ -105,4 +112,3 @@ find_section_name :: proc(section: []byte, offset: u32) -> string {
 
   return end == 0 ? "" : section_string_start[:end - 1]
 }
-

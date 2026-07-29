@@ -323,34 +323,58 @@ decode_elf_header :: proc(file: []byte) -> (header: Elf_Header, err: Error) {
   return
 }
 
-compute_section_header_boundaries :: proc(header: Elf_Header, section_index: u64) -> (start: u64, end: u64) {
-  start = header.section_header_offset + u64(header.section_header_table_size) * section_index
+compute_section_header_boundaries :: proc(
+  header: Elf_Header,
+  section_index: u64,
+) -> (
+  start: u64,
+  end: u64,
+) {
+  start = header.section_header_offset + u64(header.section_header_size) * section_index
   end = start + u64(header.section_header_size)
   return
 }
 
-slice_section_header :: proc(header: Elf_Header, section_index: u64, file: []byte) -> (section: []byte) {
+slice_section_header :: proc(
+  header: Elf_Header,
+  section_index: u64,
+  file: []byte,
+) -> (
+  section: []byte,
+) {
   start, end := compute_section_header_boundaries(header, section_index)
   return file[start:end]
 }
 
-compute_program_header_boundaries :: proc(header: Elf_Header, section_index: u64) -> (start: u64, end: u64) {
-  start = header.section_header_offset + u64(header.section_header_table_size) * section_index
+compute_program_header_boundaries :: proc(
+  header: Elf_Header,
+  segment_index: u64,
+) -> (
+  start: u64,
+  end: u64,
+) {
+  start = header.program_header_offset + u64(header.program_header_size) * segment_index
   end = start + u64(header.section_header_size)
   return
 }
 
-slice_program_header :: proc(header: Elf_Header, section_index: u64, file: []byte) -> (section: []byte) {
-  start, end := compute_program_header_boundaries(header, section_index)
+slice_program_header :: proc(
+  header: Elf_Header,
+  segment_index: u64,
+  file: []byte,
+) -> (
+  section: []byte,
+) {
+  start, end := compute_program_header_boundaries(header, segment_index)
   return file[start:end]
 }
 
 slice_section :: proc(section_header: Section_Header, file: []byte) -> (section: []byte) {
-  section = file[section_header.file_offset: section_header.file_offset + section_header.size]
+  section = file[section_header.file_offset:section_header.file_offset + section_header.size]
   return
 }
 
-slice_segment :: proc(header: Elf_Header, program_header: Program_Header, file: []byte) -> (section: []byte) {
-  section = file[program_header.offset: program_header.file_segment_size + program_header.offset]
+slice_segment :: proc(program_header: Program_Header, file: []byte) -> (section: []byte) {
+  section = file[program_header.offset:program_header.offset + program_header.file_segment_size]
   return
 }
